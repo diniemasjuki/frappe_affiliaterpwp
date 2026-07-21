@@ -1,0 +1,123 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-07-21 11:53:28.067548",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "payout_info_section",
+  "affiliate",
+  "bill_no",
+  "generated_date",
+  "column_break_wevx",
+  "status",
+  "payment_method",
+  "period_section",
+  "period_start",
+  "column_break_gxzh",
+  "period_end",
+  "amount_and_commissions_section",
+  "amount",
+  "commissions"
+ ],
+ "fields": [
+  {
+   "fieldname": "payout_info_section",
+   "fieldtype": "Section Break",
+   "label": "Payout Info"
+  },
+  {
+   "fieldname": "affiliate",
+   "fieldtype": "Link",
+   "label": "Affiliate",
+   "options": "Affiliate Profile"
+  },
+  {
+   "fieldname": "bill_no",
+   "fieldtype": "Data",
+   "label": "Bill No"
+  },
+  {
+   "fieldname": "generated_date",
+   "fieldtype": "Date",
+   "label": "Generated Date"
+  },
+  {
+   "fieldname": "column_break_wevx",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status"
+  },
+  {
+   "fieldname": "payment_method",
+   "fieldtype": "Data",
+   "label": "Payment Method"
+  },
+  {
+   "fieldname": "period_section",
+   "fieldtype": "Section Break",
+   "label": "Period"
+  },
+  {
+   "fieldname": "period_start",
+   "fieldtype": "Date",
+   "label": "Period Start"
+  },
+  {
+   "fieldname": "column_break_gxzh",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "period_end",
+   "fieldtype": "Date",
+   "label": "Period End"
+  },
+  {
+   "fieldname": "amount_and_commissions_section",
+   "fieldtype": "Section Break",
+   "label": "Amount and Commissions"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount"
+  },
+  {
+   "fieldname": "commissions",
+   "fieldtype": "Table",
+   "label": "Commissions",
+   "options": "Affiliate Payout Commission"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-07-21 12:02:54.816601",
+ "modified_by": "Administrator",
+ "module": "Affiliate",
+ "name": "Affiliate Payout",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

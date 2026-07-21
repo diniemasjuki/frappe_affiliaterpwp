@@ -1,0 +1,209 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-07-21 11:27:29.457778",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "account_section",
+  "email_id",
+  "phone",
+  "column_break_tarh",
+  "status",
+  "personal_information_section",
+  "full_name",
+  "national_id",
+  "gender",
+  "date_of_birth",
+  "address",
+  "column_break_hsak",
+  "document_id",
+  "image_vstv",
+  "referral_and_commission_section",
+  "referral_code",
+  "commission_rate",
+  "column_break_kpcj",
+  "total_sales",
+  "total_commission",
+  "available_balance",
+  "payout_details_section",
+  "sales_partner",
+  "column_break_ejzs",
+  "bank_name",
+  "account_name",
+  "account_number"
+ ],
+ "fields": [
+  {
+   "fieldname": "account_section",
+   "fieldtype": "Section Break",
+   "label": "Account"
+  },
+  {
+   "fieldname": "email_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Email Id",
+   "options": "Email",
+   "reqd": 1
+  },
+  {
+   "fieldname": "phone",
+   "fieldtype": "Phone",
+   "label": "Phone"
+  },
+  {
+   "fieldname": "column_break_tarh",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Pending Verification\nVerified"
+  },
+  {
+   "fieldname": "personal_information_section",
+   "fieldtype": "Section Break",
+   "label": "Personal Information"
+  },
+  {
+   "fieldname": "full_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Full Name"
+  },
+  {
+   "fieldname": "national_id",
+   "fieldtype": "Data",
+   "label": "IC Number / National ID"
+  },
+  {
+   "fieldname": "gender",
+   "fieldtype": "Select",
+   "label": "Gender"
+  },
+  {
+   "fieldname": "date_of_birth",
+   "fieldtype": "Date",
+   "label": "Date of Birth"
+  },
+  {
+   "fieldname": "address",
+   "fieldtype": "Small Text",
+   "label": "Address"
+  },
+  {
+   "fieldname": "column_break_hsak",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "document_id",
+   "fieldtype": "Attach",
+   "label": "Document ID"
+  },
+  {
+   "fieldname": "image_vstv",
+   "fieldtype": "Image",
+   "options": "document_id"
+  },
+  {
+   "fieldname": "referral_and_commission_section",
+   "fieldtype": "Section Break",
+   "label": "Referral and Commission"
+  },
+  {
+   "fieldname": "referral_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Referral Code"
+  },
+  {
+   "fieldname": "commission_rate",
+   "fieldtype": "Percent",
+   "label": "Commission Rate(%)"
+  },
+  {
+   "fieldname": "column_break_kpcj",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_sales",
+   "fieldtype": "Currency",
+   "label": "Total Sales",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_commission",
+   "fieldtype": "Currency",
+   "label": "Total Commission",
+   "read_only": 1
+  },
+  {
+   "fieldname": "available_balance",
+   "fieldtype": "Currency",
+   "label": "Available Balance",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payout_details_section",
+   "fieldtype": "Section Break",
+   "label": "Payout Details"
+  },
+  {
+   "fieldname": "sales_partner",
+   "fieldtype": "Link",
+   "label": "Sales Partner",
+   "options": "Account"
+  },
+  {
+   "fieldname": "column_break_ejzs",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "bank_name",
+   "fieldtype": "Data",
+   "label": "Bank Name"
+  },
+  {
+   "fieldname": "account_name",
+   "fieldtype": "Data",
+   "label": "Account Name"
+  },
+  {
+   "fieldname": "account_number",
+   "fieldtype": "Data",
+   "label": "Account Number"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-07-21 11:47:13.546640",
+ "modified_by": "Administrator",
+ "module": "Affiliate",
+ "name": "Affiliate Profile",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "full_name"
+}

@@ -1,0 +1,80 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "autoname": "COM-.YYYY.-.#####",
+ "creation": "2026-07-21 11:48:38.295120",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "affiliate",
+  "sales_order",
+  "sales_invoice",
+  "column_break_pakj",
+  "commission_amount",
+  "status"
+ ],
+ "fields": [
+  {
+   "fieldname": "affiliate",
+   "fieldtype": "Link",
+   "label": "Affiliate",
+   "options": "Affiliate Profile"
+  },
+  {
+   "fieldname": "sales_order",
+   "fieldtype": "Link",
+   "label": "Sales Order",
+   "options": "Sales Order"
+  },
+  {
+   "fieldname": "sales_invoice",
+   "fieldtype": "Link",
+   "label": "Sales Invoice",
+   "options": "Sales Invoice"
+  },
+  {
+   "fieldname": "column_break_pakj",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "commission_amount",
+   "fieldtype": "Currency",
+   "label": "Commission Amount"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pending\nApproved\nPaid\nDenied"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-07-21 11:52:40.625439",
+ "modified_by": "Administrator",
+ "module": "Affiliate",
+ "name": "Affiliate Commission",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}
