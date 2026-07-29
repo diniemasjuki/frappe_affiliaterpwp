@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Affiliate Portal</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/25.2.0/build/css/intlTelInput.min.css"/>
+  <link rel="stylesheet" href="/assets/affiliate/css/affiliate-portal.css"/>
+</head>
+<body>
+
+<div class="sc on" id="S-loading">
+  <div class="ap-loading">Loading...</div>
+</div>
+
+<div class="sc" id="S-login">
+  <div class="auth-wrap">
+    <div class="auth-box">
+      <div class="auth-title">Affiliate sign in</div>
+      <div class="auth-sub">Sign in to your affiliate account</div>
+      <div class="msg-error" id="login-error"><span id="login-error-msg"></span></div>
+      <div class="f">
+        <label class="lbl">Email address</label>
+        <input type="email" id="login-em" placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <div class="f">
+        <label class="lbl">Password</label>
+        <input type="password" id="login-pw" placeholder="Your password" autocomplete="current-password"
+               onkeydown="if(event.key==='Enter') doLogin()"/>
+      </div>
+      <button class="btn btn-p btn-full" id="login-btn" onclick="doLogin()">Sign in</button>
+      <div class="auth-divider"><span>or</span></div>
+      <button class="btn btn-g btn-full btn-google" onclick="signInWithGoogle()">Sign in with Google</button>
+      <div class="switch-link">Don't have an account? <a onclick="sw('S-register')">Register now</a></div>
+    </div>
+  </div>
+</div>
+
+<div class="sc" id="S-register">
+  <div class="auth-wrap">
+    <div class="auth-box">
+      <div class="auth-title">Join the affiliate program</div>
+      <div class="auth-sub">Earn commission by referring customers</div>
+      <div class="msg-error" id="register-error"><span id="register-error-msg"></span></div>
+      <div class="f">
+        <label class="lbl">First name</label>
+        <input type="text" id="reg-first-name"/>
+      </div>
+      <div class="f">
+        <label class="lbl">Last name</label>
+        <input type="text" id="reg-last-name"/>
+      </div>
+      <div class="f">
+        <label class="lbl">Email address</label>
+        <input type="email" id="reg-email"/>
+      </div>
+      <div class="f">
+        <label class="lbl">Password</label>
+        <input type="password" id="reg-password" placeholder="At least 8 characters"/>
+        <div style="font-size:11px;color:#B0AC9F;margin-top:4px;">Use a mix of uppercase, lowercase and numbers - avoid common words or simple patterns.</div>
+      </div>
+      <div class="f">
+        <label class="lbl">Confirm password</label>
+        <input type="password" id="reg-password-confirm"/>
+      </div>
+      <button class="btn btn-p btn-full" id="register-btn" onclick="doRegister()">Create account</button>
+      <div class="switch-link">Already have an account? <a onclick="sw('S-login')">Sign in</a></div>
+    </div>
+  </div>
+</div>
+
+<div class="sc" id="S-wizard-1">
+  <div class="wiz-wrap">
+    <div class="wiz-box">
+      <div class="wiz-steps">
+        <div class="wiz-step-dot active"></div>
+        <div class="wiz-step-dot"></div>
+        <div class="wiz-step-dot"></div>
+        <div class="wiz-step-dot"></div>
+      </div>
+      <div class="auth-title">Personal information</div>
+      <div class="auth-sub">Tell us a bit about yourself</div>
+      <div class="msg-error" id="wiz1-error"><span id="wiz1-error-msg"></span></div>
+      <div class="f">
+        <label class="lbl">Full name</label>
+        <input type="text" id="wiz1-full-name"/>
+      </div>
+      <div class="f">
+        <label class="lbl">Phone number</label>
+        <input type="text" id="wiz1-phone" placeholder=" 123456789"/>
+      </div>
+      <div class="f">
+        <label class="lbl">Gender</label>
+        <select id="wiz1-gender">
+          <option value="">Select</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+        </select>
+      </div>
+      <div class="f">
+        <label class="lbl">Date of birth</label>
+        <input type="date" id="wiz1-dob"/>
+      </div>
+      <div class="f">
+        <label class="lbl">Address</label>
+        <textarea id="wiz1-address"></textarea>
+      </div>
+      <button class="btn btn-p btn-full" id="wiz1-btn" onclick="submitWizard1()">Continue</button>
+    </div>
+  </div>
+</div>
+
+<div class="sc" id="S-wizard-2">
+  <div class="wiz-wrap">
+    <div class="wiz-box">
+      <div class="wiz-steps">
+        <div class="wiz-step-dot done"></div>
+        <div class="wiz-step-dot active"></div>
+        <div class="wiz-step-dot"></div>
+        <div class="wiz-step-dot"></div>
+      </div>
+      <div class="auth-title">Identity verification</div>
+      <div class="auth-sub">We need this to verify your account</div>
+      <div class="msg-error" id="wiz2-error"><span id="wiz2-error-msg"></span></div>
+      <div class="f">
+        <label class="lbl">National ID / IC number</label>
+        <input type="text" id="wiz2-national-id"/>
+      </div>
+      <div class="f">
+        <label class="lbl">Upload ID document</label>
+        <input type="file" id="wiz2-document" accept="image/*,.pdf"/>
+        <div id="wiz2-upload-status" style="font-size:12px;color:#7D7A70;margin-top:6px;"></div>
+      </div>
+      <div class="wiz-nav-row">
+        <button class="btn btn-outline" id="wiz2-back-btn" onclick="sw('S-wizard-1')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Back
+        </button>
+        <button class="btn btn-p" id="wiz2-btn" onclick="submitWizard2()">Continue</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="sc" id="S-wizard-3">
+  <div class="wiz-wrap">
+    <div class="wiz-box">
+      <div class="wiz-steps">
+        <div class="wiz-step-dot done"></div>
+        <div class="wiz-step-dot done"></div>
+        <div class="wiz-step-dot active"></div>
+        <div class="wiz-step-dot"></div>
+      </div>
+      <div class="auth-title">Bank details</div>
+      <div class="auth-sub">Where should we send your commission payouts?</div>
+      <div class="wiz3-note">
+        <strong>Optional for now.</strong> You can add this later, but you'll need it before requesting a payout.
+      </div>
+      <div class="msg-error" id="wiz3-error"><span id="wiz3-error-msg"></span></div>
+      <div class="f">
+        <label class="lbl">Bank name</label>
+        <input type="text" id="wiz3-bank-name"/>
+      </div>
+      <div class="f">
+        <label class="lbl">Account name</label>
+        <input type="text" id="wiz3-account-name"/>
+      </div>
+      <div class="f">
+        <label class="lbl">Account number</label>
+        <input type="text" id="wiz3-account-number"/>
+      </div>
+      <div class="wiz-nav-row">
+        <button class="btn btn-outline" id="wiz3-back-btn" onclick="sw('S-wizard-2')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Back
+        </button>
+        <button class="btn btn-p" id="wiz3-btn" onclick="submitWizard3()">Continue</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="sc" id="S-wizard-4">
+  <div class="wiz-wrap">
+    <div class="wiz-box">
+      <div class="wiz-steps">
+        <div class="wiz-step-dot done"></div>
+        <div class="wiz-step-dot done"></div>
+        <div class="wiz-step-dot done"></div>
+        <div class="wiz-step-dot active"></div>
+      </div>
+      <div class="auth-title">Choose your referral code</div>
+      <div class="auth-sub">Pick something memorable, or let us generate one for you.</div>
+      <div class="msg-error" id="wiz4-error"><span id="wiz4-error-msg"></span></div>
+      <div class="f">
+        <label class="lbl">Referral code (8 characters)</label>
+        <input type="text" id="wiz4-referral-code" maxlength="8" style="text-transform:uppercase;letter-spacing:0.05em;" oninput="onWizardReferralCodeInput()"/>
+        <div id="wiz4-availability" style="font-size:12px;margin-top:6px;"></div>
+      </div>
+      <div class="wiz-nav-row">
+        <button class="btn btn-outline" id="wiz4-back-btn" onclick="sw('S-wizard-3')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Back
+        </button>
+        <button class="btn btn-p" id="wiz4-btn" onclick="submitWizard4()">Confirm and finish</button>
+      </div>
+      <p class="wiz-skip-link" onclick="skipWizard4()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M13 5L20 12L13 19M4 12H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Skip - we'll generate a random code for you</span>
+      </p>
+    </div>
+  </div>
+</div>
+
+<div class="sc" id="S-dashboard">
+  <div class="ap-mobile-topbar">
+    <button class="ap-hamburger-btn" onclick="apToggleSidebar()" aria-label="Open menu">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 6H21M3 12H21M3 18H21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <span class="ap-mobile-topbar-title" id="ap-mobile-title">Dashboard</span>
+    <span style="width:22px;"></span>
+  </div>
+  <div class="ap-sidebar-overlay" id="ap-sidebar-overlay" onclick="apCloseSidebar()"></div>
+  <div class="ap-shell">
+    <div class="ap-sidebar" id="ap-sidebar">
+      <div class="ap-sidebar-header" id="ap-affiliate-name">Affiliate</div>
+
+      <div class="ap-nav-item active" data-tab="overview" onclick="apShowTab('overview')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="13" y="3" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="3" y="13" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="13" y="13" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="2"/></svg>
+        Dashboard
+      </div>
+      <div class="ap-nav-item" data-tab="referrals" onclick="apShowTab('referrals')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 12H10L12 16L14 8L16 12H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg>
+        My referrals
+      </div>
+      <div class="ap-nav-item" data-tab="payouts" onclick="apShowTab('payouts')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 2V22M17 6.5C17 4.57 14.76 3 12 3C9.24 3 7 4.57 7 6.5C7 8.43 9.24 10 12 10C14.76 10 17 11.57 17 13.5C17 15.43 14.76 17 12 17C9.24 17 7 15.43 7 13.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        Payouts
+      </div>
+
+      <div class="ap-nav-section-label">Settings</div>
+      <div class="ap-nav-item ap-nav-subitem" data-tab="profile" onclick="apShowTab('profile')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/><path d="M4 21C4 16.58 7.58 13 12 13C16.42 13 20 16.58 20 21" stroke="currentColor" stroke-width="2"/></svg>
+        Profile
+      </div>
+      <div class="ap-nav-item ap-nav-subitem" data-tab="referral-code" onclick="apShowTab('referral-code')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 12H10L12 16L14 8L16 12H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg>
+        Referral code
+      </div>
+      <div class="ap-nav-item ap-nav-subitem" data-tab="payment-method" onclick="apShowTab('payment-method')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="14" rx="2" stroke="currentColor" stroke-width="2"/><path d="M2 10H22" stroke="currentColor" stroke-width="2"/></svg>
+        Payment method
+      </div>
+      <div class="ap-nav-item ap-nav-subitem" data-tab="login-method" onclick="apShowTab('login-method')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="1.5" stroke="currentColor" stroke-width="2"/><path d="M8 11V7C8 4.79 9.79 3 12 3C14.21 3 16 4.79 16 7V11" stroke="currentColor" stroke-width="2"/></svg>
+        Login method
+      </div>
+
+      <div class="ap-logout" onclick="doLogout()">Sign out</div>
+    </div>
+
+    <div class="ap-main">
+
+      <div class="ap-tab-panel active" id="tab-overview">
+        <div class="ap-header-row">
+          <div class="ap-header-left">
+            <div class="ap-avatar" id="ap-avatar">A</div>
+            <div>
+              <p class="ap-greeting" id="ap-greeting">Welcome back</p>
+              <p class="ap-greeting-sub">Here's how your referrals are performing.</p>
+            </div>
+          </div>
+          <span class="ap-status-pill pending" id="ap-status-pill">Pending verification</span>
+        </div>
+
+        <div class="ap-code-card">
+          <div>
+            <p class="ap-code-label">Your referral code</p>
+            <p class="ap-code-value" id="ap-referral-code" style="display:none"></p>
+            <p class="ap-code-pending" id="ap-referral-pending">Pending verification</p>
+          </div>
+          <button class="ap-copy-btn-dark" id="ap-copy-btn" onclick="apCopyCode()" style="display:none">Copy</button>
+        </div>
+
+        <div class="ap-cards-row">
+          <div class="ap-metric-card">
+            <p class="ap-metric-label">Total sales</p>
+            <p class="ap-metric-value" id="ap-total-sales">RM0.00</p>
+          </div>
+          <div class="ap-metric-card">
+            <p class="ap-metric-label">Total commission</p>
+            <p class="ap-metric-value" id="ap-total-commission">RM0.00</p>
+          </div>
+          <div class="ap-metric-card">
+            <p class="ap-metric-label">Available balance</p>
+            <p class="ap-metric-value" id="ap-available-balance">RM0.00</p>
+          </div>
+        </div>
+
+        <p class="ap-section-title">Commission status</p>
+        <p class="ap-section-sub">What's been paid out and what's still pending.</p>
+        <div class="ap-perf-card" id="ap-commission-status">
+          <div class="ap-empty"><p class="ap-empty-title">Loading...</p></div>
+        </div>
+
+        <div class="ap-perf-card">
+          <div class="ap-perf-header">
+            <p class="ap-section-title" style="margin:0;">Your performance</p>
+            <div class="ap-perf-periods">
+              <button class="ap-perf-period-btn active" data-period="week" onclick="apSetPerfPeriod('week')">This week</button>
+              <button class="ap-perf-period-btn" data-period="month" onclick="apSetPerfPeriod('month')">This month</button>
+              <button class="ap-perf-period-btn" data-period="all" onclick="apSetPerfPeriod('all')">All time</button>
+            </div>
+          </div>
+          <div id="ap-performance">
+            <div class="ap-empty"><p class="ap-empty-title">Loading...</p></div>
+          </div>
+        </div>
+
+        <p class="ap-section-title">Top affiliates</p>
+        <p class="ap-section-sub">Ranked by all-time sales referred.</p>
+        <div class="ap-board" id="ap-leaderboard">
+          <div class="ap-empty">
+            <p class="ap-empty-title">Loading leaderboard...</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="ap-tab-panel" id="tab-referrals">
+        <p class="ap-page-title">My referrals</p>
+        <p class="ap-page-sub">Every sale referred through your code, from order to invoice.</p>
+
+        <div class="ap-tabs-row">
+          <button class="ap-tab-btn active" data-refsub="all" onclick="apSetReferralFilter('all')">All orders</button>
+          <button class="ap-tab-btn" data-refsub="invoiced" onclick="apSetReferralFilter('invoiced')">Invoiced</button>
+          <button class="ap-tab-btn" data-refsub="denied" onclick="apSetReferralFilter('denied')">Denied</button>
+        </div>
+
+        <div id="ap-referrals-list">
+          <div class="ap-empty"><p class="ap-empty-title">Loading...</p></div>
+        </div>
+      </div>
+
+      <div class="ap-tab-panel" id="tab-payouts">
+        <p class="ap-page-title">Payouts</p>
+        <p class="ap-page-sub">When your commission actually reached your bank account.</p>
+
+        <div class="ap-cards-row" id="ap-payouts-summary">
+          <div class="ap-metric-card">
+            <p class="ap-metric-label">Available balance</p>
+            <p class="ap-metric-value" id="ap-payout-available">RM0.00</p>
+          </div>
+          <div class="ap-metric-card">
+            <p class="ap-metric-label">Total paid out</p>
+            <p class="ap-metric-value" id="ap-payout-total-paid">RM0.00</p>
+          </div>
+          <div class="ap-metric-card">
+            <p class="ap-metric-label">Pending payout</p>
+            <p class="ap-metric-value" id="ap-payout-pending">RM0.00</p>
+          </div>
+        </div>
+
+        <div class="ap-settings-card" style="max-width:none; margin-bottom:22px; display:flex; align-items:center; justify-content:space-between; gap:16px;">
+          <div>
+            <p class="ap-row-title" style="margin-bottom:2px;">Request a payout</p>
+            <p class="ap-row-sub" id="ap-payout-request-hint">Minimum cashout is RM0.00.</p>
+          </div>
+          <button class="btn btn-p" id="ap-request-payout-btn" onclick="apRequestPayout()">Request payout</button>
+        </div>
+
+        <div id="ap-payouts-list">
+          <div class="ap-empty"><p class="ap-empty-title">Loading...</p></div>
+        </div>
+      </div>
+
+      <div class="ap-tab-panel" id="tab-profile">
+        <p class="ap-page-title">Profile</p>
+        <p class="ap-page-sub">Your personal details.</p>
+        <div class="ap-settings-card ap-settings-form">
+          <div class="msg-success" id="profile-saved">Saved.</div>
+          <div class="f">
+            <label class="lbl">Full name</label>
+            <input type="text" id="set-full-name"/>
+          </div>
+          <div class="f">
+            <label class="lbl">Phone number</label>
+            <input type="text" id="set-phone"/>
+          </div>
+          <div class="f" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div>
+              <label class="lbl">Gender</label>
+              <select id="set-gender">
+                <option value="">Select</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+            <div>
+              <label class="lbl">Date of birth</label>
+              <input type="date" id="set-dob"/>
+            </div>
+          </div>
+          <div class="f">
+            <label class="lbl">Address</label>
+            <textarea id="set-address"></textarea>
+          </div>
+          <button class="btn btn-p" onclick="apSaveProfile()">Save changes</button>
+        </div>
+      </div>
+
+      <div class="ap-tab-panel" id="tab-referral-code">
+        <p class="ap-page-title">Referral code</p>
+        <p class="ap-page-sub">The code customers use to credit sales to you.</p>
+        <div class="ap-settings-card ap-settings-form">
+          <div class="msg-success" id="referral-code-saved">Saved.</div>
+          <div class="msg-error" id="referral-code-error"><span id="referral-code-error-msg"></span></div>
+          <div class="f">
+            <label class="lbl">Referral code (8 characters)</label>
+            <input type="text" id="set-referral-code" maxlength="8" style="text-transform:uppercase;letter-spacing:0.05em;" oninput="onSettingsReferralCodeInput()"/>
+            <div id="set-referral-availability" style="font-size:12px;margin-top:6px;"></div>
+          </div>
+          <p class="ap-field-hint" id="referral-code-cooldown-hint"></p>
+          <button class="btn btn-p" id="referral-code-save-btn" onclick="apSaveReferralCode()">Save changes</button>
+        </div>
+      </div>
+
+      <div class="ap-tab-panel" id="tab-payment-method">
+        <p class="ap-page-title">Payment method</p>
+        <p class="ap-page-sub">Where we send your commission payouts.</p>
+        <div class="ap-settings-card ap-settings-form">
+          <div class="msg-success" id="payment-saved">Saved.</div>
+          <div class="f">
+            <label class="lbl">Bank name</label>
+            <input type="text" id="set-bank-name"/>
+          </div>
+          <div class="f">
+            <label class="lbl">Account name</label>
+            <input type="text" id="set-account-name"/>
+          </div>
+          <div class="f">
+            <label class="lbl">Account number</label>
+            <input type="text" id="set-account-number"/>
+          </div>
+          <button class="btn btn-p" onclick="apSavePaymentMethod()">Save changes</button>
+        </div>
+      </div>
+
+      <div class="ap-tab-panel" id="tab-login-method">
+        <p class="ap-page-title">Login method</p>
+        <p class="ap-page-sub">Manage how you sign in.</p>
+        <div class="ap-settings-card">
+          <div class="f" style="border-bottom:1px solid #E2E2E4; padding-bottom:16px; margin-bottom:16px;">
+            <label class="lbl">Email address</label>
+            <div class="ap-field-readonly" id="ap-login-email">-</div>
+            <p class="ap-field-hint">Contact support to change your email.</p>
+          </div>
+          <div class="msg-error" id="password-error"><span id="password-error-msg"></span></div>
+          <div class="msg-success" id="password-saved">Password changed.</div>
+          <div class="f">
+            <label class="lbl">Current password</label>
+            <input type="password" id="pw-current"/>
+          </div>
+          <div class="f">
+            <label class="lbl">New password</label>
+            <input type="password" id="pw-new" placeholder="At least 8 characters"/>
+          </div>
+          <div class="f">
+            <label class="lbl">Confirm new password</label>
+            <input type="password" id="pw-confirm"/>
+          </div>
+          <button class="btn btn-p" onclick="apChangePassword()">Change password</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/25.2.0/build/js/intlTelInputWithUtils.min.js"></script>
+<script src="/assets/affiliate/js/affiliate-portal.js"></script>
+</body>
+</html>

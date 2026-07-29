@@ -12,7 +12,9 @@
   "sales_invoice",
   "column_break_pakj",
   "commission_amount",
-  "status"
+  "status",
+  "invoices_section",
+  "sales_invoices"
  ],
  "fields": [
   {
@@ -30,8 +32,9 @@
   {
    "fieldname": "sales_invoice",
    "fieldtype": "Link",
-   "label": "Sales Invoice",
-   "options": "Sales Invoice"
+   "label": "Sales Invoice (Primary)",
+   "options": "Sales Invoice",
+   "read_only": 1
   },
   {
    "fieldname": "column_break_pakj",
@@ -46,13 +49,25 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Pending\nApproved\nPaid\nDenied"
+   "options": "Pending\nInvoiced\nApproved\nPaid\nDenied",
+   "read_only": 1
+  },
+  {
+   "fieldname": "invoices_section",
+   "fieldtype": "Section Break",
+   "label": "Invoices"
+  },
+  {
+   "fieldname": "sales_invoices",
+   "fieldtype": "Table",
+   "label": "Sales Invoices",
+   "options": "Affiliate Commission Invoice"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-21 11:52:40.625439",
+ "modified": "2026-07-23 18:02:51.338175",
  "modified_by": "Administrator",
  "module": "Affiliate",
  "name": "Affiliate Commission",

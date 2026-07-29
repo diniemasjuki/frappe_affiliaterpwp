@@ -9,7 +9,10 @@
   "referral_code_prefix",
   "referral_code_name_length",
   "default_commission_percent",
-  "minimum_cashout"
+  "minimum_cashout",
+  "commission_approval_section",
+  "approve_commission_on_so_status",
+  "approve_commission_on_si_status"
  ],
  "fields": [
   {
@@ -38,13 +41,36 @@
    "fieldname": "minimum_cashout",
    "fieldtype": "Currency",
    "label": "Minimum Cashout"
+  },
+  {
+   "fieldname": "commission_approval_section",
+   "fieldtype": "Section Break",
+   "label": "Commission Approval Rules"
+  },
+  {
+   "default": "Completed",
+   "description": "A Sales Order reaching this status marks the linked commission as \"Approved\" (eligible for the affiliate to cash out) - but only while no Sales Invoice exists yet. Once a Sales Invoice is linked, the SI rule below takes over instead. ",
+   "fieldname": "approve_commission_on_so_status",
+   "fieldtype": "Select",
+   "label": "Approve Commission When Sales Order Status Is",
+   "options": "Draft\nOn Hold\nTo Deliver and Bill\nTo Bill\nTo Deliver\nCompleted",
+   "reqd": 1
+  },
+  {
+   "default": "Paid",
+   "description": "A Sales Invoice reaching this status marks the linked commission as \"Approved\" (eligible for the affiliate to cash out) - this takes priority over the Sales Order rule above once an invoice exists. ",
+   "fieldname": "approve_commission_on_si_status",
+   "fieldtype": "Select",
+   "label": "Approve Commission When Sales Invoice Status Is",
+   "options": "Draft\nSubmitted\nUnpaid\nPartly Paid\nOverdue\nUnpaid and Discounted\nOverdue and Discounted\nPaid",
+   "reqd": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-07-21 11:31:47.586125",
+ "modified": "2026-07-23 12:51:45.329569",
  "modified_by": "Administrator",
  "module": "Affiliate",
  "name": "Affiliate Settings",

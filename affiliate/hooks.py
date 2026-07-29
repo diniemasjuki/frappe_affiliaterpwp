@@ -275,3 +275,34 @@ require_type_annotated_api_methods = True
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
 
+
+# Document Events (Affiliate module)
+# -----------------------------------
+# Keeps Affiliate Commission.status in sync with the linked Sales
+# Order/Sales Invoice's own status - fully automatic, no manual admin
+# approval step. See affiliate/api/commission_sync.py for the mapping
+# tables and sync logic.
+#
+# Payment Entry is also hooked (not just Sales Invoice) because ERPNext
+# updates Sales Invoice.status internally when a Payment Entry against
+# it is submitted/cancelled - that internal update doesn't reliably
+# re-fire Sales Invoice's own on_update the same way an ordinary save
+# does, so relying on the Sales Invoice hook alone can leave a
+# commission stuck on "Invoiced" even after the customer has paid.
+doc_events = {
+	"Sales Order": {
+		"on_update": [
+			"affiliate.api.commission_sync.create_commission_if_eligible",
+			"affiliate.api.commission_sync.sync_from_sales_order",
+		],
+		"on_cancel": "affiliate.api.commission_sync.sync_from_sales_order",
+	},
+	"Sales Invoice": {
+		"on_update": "affiliate.api.commission_sync.sync_from_sales_invoice",
+		"on_cancel": "affiliate.api.commission_sync.sync_from_sales_invoice",
+	},
+	"Payment Entry": {
+		"on_submit": "affiliate.api.commission_sync.sync_from_payment_entry",
+		"on_cancel": "affiliate.api.commission_sync.sync_from_payment_entry",
+	},
+}

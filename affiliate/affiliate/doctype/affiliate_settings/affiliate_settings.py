@@ -14,6 +14,8 @@ class AffiliateSettings(Document):
 	if TYPE_CHECKING:
 		from frappe.types import DF
 
+		approve_commission_on_si_status: DF.Literal["Draft", "Submitted", "Unpaid", "Partly Paid", "Overdue", "Unpaid and Discounted", "Overdue and Discounted", "Paid"]
+		approve_commission_on_so_status: DF.Literal["Draft", "On Hold", "To Deliver and Bill", "To Bill", "To Deliver", "Completed"]
 		default_commission_percent: DF.Percent
 		minimum_cashout: DF.Currency
 		referral_code_name_length: DF.Int
