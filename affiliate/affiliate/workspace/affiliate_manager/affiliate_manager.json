@@ -1,0 +1,113 @@
+{
+ "app": "erpnext",
+ "charts": [],
+ "content": "[]",
+ "creation": "2026-07-30 21:35:50.893977",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "badge-dollar-sign",
+ "idx": 0,
+ "indicator_color": "green",
+ "is_hidden": 0,
+ "label": "Affiliate Manager",
+ "link_to": "Affiliate Profile",
+ "link_type": "DocType",
+ "links": [],
+ "modified": "2026-07-30 21:55:22.532919",
+ "modified_by": "Administrator",
+ "module": "Affiliate",
+ "name": "Affiliate Manager",
+ "number_cards": [],
+ "owner": "Administrator",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [
+  {
+   "role": "All"
+  }
+ ],
+ "sequence_id": 38.0,
+ "shortcuts": [
+  {
+   "doc_view": "",
+   "icon": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQkVexxzbg3jvRGCioSPljjTfsjn7CWC45h3L40QZwXjQ&s=10",
+   "label": "Portal Affiliate",
+   "type": "URL",
+   "url": "/affiliate-portal"
+  }
+ ],
+ "sidebar_items": [
+  {
+   "child": 0,
+   "collapsible": 1,
+   "default_workspace": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Affiliate",
+   "link_to": "Affiliate Profile",
+   "link_type": "DocType",
+   "open_in_new_tab": 1,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "default_workspace": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Affiliate Commission",
+   "link_to": "Affiliate Commission",
+   "link_type": "DocType",
+   "open_in_new_tab": 1,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "default_workspace": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Affiliate Payout",
+   "link_to": "Affiliate Payout",
+   "link_type": "DocType",
+   "open_in_new_tab": 1,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "default_workspace": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Affiliate Settings",
+   "link_to": "Affiliate Settings",
+   "link_type": "DocType",
+   "open_in_new_tab": 1,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "default_workspace": 0,
+   "icon": "user-star",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Affiliates Portal",
+   "link_type": "URL",
+   "open_in_new_tab": 1,
+   "show_arrow": 0,
+   "type": "Link",
+   "url": "/affiliate-portal"
+  }
+ ],
+ "standard": 1,
+ "title": "Affiliate Manager",
+ "type": "Link"
+}

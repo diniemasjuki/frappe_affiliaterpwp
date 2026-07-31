@@ -1,0 +1,83 @@
+{
+ "app": "affiliate",
+ "creation": "2026-07-30 20:48:39.853420",
+ "docstatus": 0,
+ "doctype": "Workspace Sidebar",
+ "header_icon": "badge-dollar-sign",
+ "idx": 0,
+ "items": [
+  {
+   "child": 0,
+   "collapsible": 1,
+   "default_workspace": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Affiliate",
+   "link_to": "Affiliate Profile",
+   "link_type": "DocType",
+   "open_in_new_tab": 1,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "default_workspace": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Affiliate Commission",
+   "link_to": "Affiliate Commission",
+   "link_type": "DocType",
+   "open_in_new_tab": 1,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "default_workspace": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Affiliate Payout",
+   "link_to": "Affiliate Payout",
+   "link_type": "DocType",
+   "open_in_new_tab": 1,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "default_workspace": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Affiliate Settings",
+   "link_to": "Affiliate Settings",
+   "link_type": "DocType",
+   "open_in_new_tab": 1,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "default_workspace": 0,
+   "icon": "user-star",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Affiliates Portal",
+   "link_type": "URL",
+   "open_in_new_tab": 1,
+   "show_arrow": 0,
+   "type": "Link",
+   "url": "/affiliate-portal"
+  }
+ ],
+ "modified": "2026-07-30 21:29:48.580630",
+ "modified_by": "Administrator",
+ "module": "Affiliate",
+ "name": "Affiliate Manager",
+ "owner": "Administrator",
+ "standard": 1,
+ "title": "Affiliate Manager"
+}

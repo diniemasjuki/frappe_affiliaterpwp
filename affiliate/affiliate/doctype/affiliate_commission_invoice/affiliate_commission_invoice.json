@@ -15,17 +15,20 @@
   {
    "fieldname": "sales_invoice",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Sales Invoice",
    "options": "Sales Invoice"
   },
   {
    "fieldname": "invoice_amount",
    "fieldtype": "Currency",
+   "in_list_view": 1,
    "label": "Invoice Amount"
   },
   {
    "fieldname": "invoice_status",
    "fieldtype": "Select",
+   "in_list_view": 1,
    "label": "Status",
    "options": "Draft\nSubmitted\nUnpaid\nPartly Paid\nOverdue\nUnpaid and Discounted\nOverdue and Discounted\nPaid\nCancelled\nReturn\nCredit Note Issued"
   }
@@ -34,7 +37,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-07-23 17:56:07.983786",
+ "modified": "2026-07-30 20:43:26.280082",
  "modified_by": "Administrator",
  "module": "Affiliate",
  "name": "Affiliate Commission Invoice",
