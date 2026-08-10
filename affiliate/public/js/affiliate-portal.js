@@ -50,8 +50,27 @@ function fmt(n) {
   return 'RM' + (parseFloat(n) || 0).toFixed(2);
 }
 
+// Token dibaca dari pageData (rujuk www/affiliate-portal.py) — bukan dari
+// window.frappe.csrf_token, sebab page ni standalone www page yang tak
+// semestinya load bundle Desk yang set global tu, dan cookie 'csrftoken'
+// browser tak reliable disegerakkan lepas login_manager.login_as() dalam
+// flow login/register/Google OAuth kita — baca terus dari cookie punca
+// semua POST lepas login gagal "Invalid Request" walaupun session sah.
+// Sama pattern macam travel_booking/public/js/portal.js.
+var _pageData = (function() {
+  try {
+    var el = document.getElementById('pageData');
+    return el ? JSON.parse(el.textContent) : {};
+  } catch (e) {
+    return {};
+  }
+})();
+var CSRF_TOKEN = _pageData.csrf_token || '';
+
 function getCsrfToken() {
-  return (window.frappe && frappe.csrf_token) || 'fetch';
+  if (CSRF_TOKEN) return CSRF_TOKEN;
+  var match = document.cookie.match(/csrftoken=([^;]+)/);
+  return match ? match[1] : '';
 }
 
 async function API(method, args) {
@@ -136,7 +155,7 @@ async function doLogin() {
     formData.append('pwd', password);
     var loginRes = await fetch('/api/method/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': 'fetch' },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': getCsrfToken() },
       credentials: 'include',
       body: formData,
     });
@@ -344,6 +363,11 @@ async function loadDashboard() {
   try {
     var data = await API('affiliate.api.portal_api.get_dashboard_data', {});
     PORTAL_DATA = data;
+
+    if (data.newly_registered) {
+      sw('S-need-register');
+      return;
+    }
 
     if (!data.wizard_complete) {
       sw('S-wizard-1');
@@ -731,6 +755,7 @@ var TAB_TITLES = {
   overview: 'Dashboard',
   referrals: 'My referrals',
   payouts: 'Payouts',
+  products: 'Products',
   profile: 'Profile',
   'referral-code': 'Referral code',
   'payment-method': 'Payment method',
@@ -752,6 +777,7 @@ function apShowTab(tab) {
     TABS_LOADED[tab] = true;
     if (tab === 'referrals') loadReferrals();
     if (tab === 'payouts') loadPayouts();
+    if (tab === 'products') loadProducts();
   }
 }
 
@@ -882,6 +908,115 @@ async function apChangePassword() {
   } catch (e) {
     showError('password-error', e.message || 'Could not change password.');
   }
+}
+
+var PRODUCTS_BASE_URL = '';
+var PRODUCTS_LIST = [];
+
+async function loadProducts() {
+  var el = document.getElementById('ap-products-grid');
+  try {
+    var data = await API('affiliate.api.products.get_products', {});
+    PRODUCTS_BASE_URL = (data.base_url || '').replace(/\/+$/, '');
+    PRODUCTS_LIST = data.products || [];
+    renderProducts(PRODUCTS_LIST);
+  } catch (e) {
+    el.innerHTML = '<div class="ap-empty"><p class="ap-empty-title">Couldn\'t load products</p><p class="ap-empty-sub">Try refreshing the page.</p></div>';
+  }
+}
+
+function buildProductUrl(packageId) {
+  var code = (PORTAL_DATA && PORTAL_DATA.profile.referral_code) || '';
+  var url = PRODUCTS_BASE_URL + '/booking/?trip=' + encodeURIComponent(packageId);
+  if (code) url += '&sp=' + encodeURIComponent(code);
+  return url;
+}
+
+function groupByTrip(list) {
+  var groups = [];
+  var byTrip = {};
+  list.forEach(function(p, idx) {
+    if (!byTrip[p.trip_id]) {
+      byTrip[p.trip_id] = { trip_id: p.trip_id, trip_name: p.trip_name, trip_image: p.trip_image, rows: [] };
+      groups.push(byTrip[p.trip_id]);
+    }
+    byTrip[p.trip_id].rows.push(idx);
+  });
+  return groups;
+}
+
+function renderProducts(list) {
+  var el = document.getElementById('ap-products-grid');
+  var hasCode = !!(PORTAL_DATA && PORTAL_DATA.profile.referral_code);
+
+  if (!list.length) {
+    el.innerHTML = '<div class="ap-empty"><p class="ap-empty-title">No products available right now</p><p class="ap-empty-sub">Check back once a trip is open for booking.</p></div>';
+    return;
+  }
+
+  var groups = groupByTrip(list);
+
+  el.innerHTML = groups.map(function(g, gi) {
+    var img = g.trip_image
+      ? '<img src="' + g.trip_image + '" alt="">'
+      : '<svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M3 8L12 3L21 8V16L12 21L3 16V8Z" stroke="#B0AC9F" stroke-width="1.6"/></svg>';
+
+    var rowsHtml = g.rows.map(function(idx) {
+      var p = list[idx];
+      var copyLabel = hasCode ? 'Copy link' : 'Code pending';
+      return '<div class="ap-product-row">' +
+        '<div class="ap-product-row-main">' +
+          '<div>' +
+            '<p class="ap-product-row-title">' + p.package_title + '</p>' +
+            (p.package_type ? '<span class="ap-badge ap-badge-neutral">' + p.package_type + '</span>' : '') +
+          '</div>' +
+          '<button class="btn btn-outline ap-product-copy-btn" data-copy="' + idx + '"' + (hasCode ? '' : ' disabled') + '>' + copyLabel + '</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    var pkgWord = g.rows.length === 1 ? 'package' : 'packages';
+
+    return '<div class="ap-trip-group">' +
+      '<div class="ap-trip-group-image">' + img + '</div>' +
+      '<div class="ap-trip-group-body">' +
+        '<p class="ap-trip-group-title">' + g.trip_name + '</p>' +
+        '<button class="ap-trip-group-toggle" data-toggle="' + gi + '">' +
+          '<span>' + g.rows.length + ' ' + pkgWord + '</span>' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+        '</button>' +
+        '<div class="ap-trip-group-packages" data-packages="' + gi + '">' + rowsHtml + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  el.querySelectorAll('[data-toggle]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var gi = btn.getAttribute('data-toggle');
+      var panel = el.querySelector('[data-packages="' + gi + '"]');
+      var open = panel.classList.contains('open');
+      panel.classList.toggle('open', !open);
+      btn.classList.toggle('open', !open);
+    });
+  });
+
+  el.querySelectorAll('[data-copy]').forEach(function(btn) {
+    if (btn.disabled) return;
+    btn.addEventListener('click', function() {
+      var idx = btn.getAttribute('data-copy');
+      navigator.clipboard.writeText(buildProductUrl(list[idx].name));
+      var original = btn.textContent;
+      btn.textContent = 'Copied';
+      setTimeout(function() { btn.textContent = original; }, 1400);
+    });
+  });
+}
+
+function apFilterProducts(query) {
+  query = (query || '').toLowerCase();
+  renderProducts(PRODUCTS_LIST.filter(function(p) {
+    return !query || p.trip_name.toLowerCase().indexOf(query) > -1;
+  }));
 }
 
 loadDashboard();

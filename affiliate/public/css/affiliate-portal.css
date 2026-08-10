@@ -171,6 +171,25 @@ textarea { resize: vertical; min-height: 70px; }
 .ap-perf-metric.pending { border-style: dashed; border-color: #D8D8DA; background: #FAFAFA; }
 .ap-perf-metric.pending .ap-perf-metric-value { color: #6B6B6E; }
 
+.ap-trip-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin-bottom: 22px; align-items: start; }
+.ap-trip-group { border: 1px solid #E2E2E4; background: #fff; border-radius: 10px; overflow: hidden; }
+.ap-trip-group-image { height: 110px; background: #F0EDE7; display: flex; align-items: center; justify-content: center; }
+.ap-trip-group-image img { width: 100%; height: 100%; object-fit: cover; }
+.ap-trip-group-body { padding: 11px 13px 12px; }
+.ap-trip-group-title { font-size: 14px; font-weight: 700; color: #111111; margin: 0 0 8px; }
+.ap-trip-group-toggle { width: 100%; background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; color: #6B6B6E; }
+.ap-trip-group-toggle svg { transition: transform 0.15s ease; flex-shrink: 0; }
+.ap-trip-group-toggle.open svg { transform: rotate(180deg); }
+.ap-trip-group-packages { display: none; margin-top: 10px; padding-top: 2px; border-top: 1px solid #F0EFEC; }
+.ap-trip-group-packages.open { display: block; }
+.ap-product-row { padding: 11px 0; border-top: 1px solid #F0EFEC; }
+.ap-product-row:first-child { border-top: none; }
+.ap-product-row-main { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ap-product-row-title { font-size: 12px; font-weight: 600; color: #111111; margin: 0 0 5px; }
+.ap-badge-neutral { background: #F0EDE7; color: #4A4740; }
+.ap-product-copy-btn { font-size: 11px; padding: 7px 11px; white-space: nowrap; flex-shrink: 0; }
+.ap-product-search { width: 220px; }
+
 .ap-settings-card { background: #fff; border: 1px solid #E2E2E4; border-radius: 12px; padding: 22px; max-width: 420px; }
 .ap-settings-form .f { max-width: 400px; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -208,6 +227,8 @@ textarea { resize: vertical; min-height: 70px; }
   .ap-copy-btn-dark { align-self: stretch; text-align: center; }
 
   .ap-cards-row, .ap-perf-grid { grid-template-columns: 1fr; }
+  .ap-trip-groups { grid-template-columns: 1fr; }
+  .ap-product-search { width: 100%; }
   .ap-status-legend-row { grid-template-columns: 1fr 1fr; gap: 10px; }
 
   .ap-perf-header { flex-direction: column; align-items: flex-start; gap: 10px; }

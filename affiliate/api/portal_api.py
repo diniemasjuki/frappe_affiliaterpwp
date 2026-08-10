@@ -62,6 +62,18 @@ def get_logged_in_profile(auto_create: bool = False):
 	intent. Every other endpoint (wizard steps, settings, etc.) keeps
 	the default False, since by the time those are called a profile
 	should already exist from the dashboard-load step.
+
+	When a profile IS freshly auto-created in this call, the returned
+	doc has `.flags.newly_created = True` set - callers that care (only
+	get_dashboard_data() does) can check this to tell "an existing
+	Frappe User (e.g. a past travel_booking customer) just landed here
+	for the first time and got silently enrolled" apart from "a
+	returning affiliate who registered on purpose but hasn't finished
+	the wizard yet" - the two cases look identical otherwise
+	(wizard_complete=False) but need different portal UX: the former
+	should see an explicit "you need to set up an affiliate profile"
+	screen before the wizard, not get dropped straight into wizard
+	step 1 with no explanation of why they're suddenly there.
 	"""
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Please sign in to continue."), frappe.PermissionError)
@@ -69,16 +81,20 @@ def get_logged_in_profile(auto_create: bool = False):
 	profile_name = frappe.db.get_value(
 		"Affiliate Profile", {"user": frappe.session.user}, "name"
 	)
+	newly_created = False
 	if not profile_name:
 		if auto_create:
 			profile_name = _create_profile_for_current_user()
+			newly_created = True
 		else:
 			frappe.throw(
 				_("Your account is not linked to an affiliate profile. Please contact support."),
 				frappe.PermissionError,
 			)
 
-	return frappe.get_doc("Affiliate Profile", profile_name)
+	doc = frappe.get_doc("Affiliate Profile", profile_name)
+	doc.flags.newly_created = newly_created
+	return doc
 
 
 def _create_profile_for_current_user() -> str:
@@ -169,6 +185,7 @@ def get_dashboard_data() -> dict:
 			"account_number": profile.account_number,
 		},
 		"wizard_complete": wizard_complete,
+		"newly_registered": bool(profile.flags.newly_created),
 		"total_sales": profile.total_sales,
 		"total_commission": profile.total_commission,
 		"available_balance": profile.available_balance,

@@ -69,6 +69,17 @@
   </div>
 </div>
 
+<div class="sc" id="S-need-register">
+  <div class="auth-wrap">
+    <div class="auth-box">
+      <div class="auth-title">Set up your affiliate profile</div>
+      <div class="auth-sub">This account isn't registered as an affiliate yet. It only takes a few steps to get your referral code and start earning commission.</div>
+      <button class="btn btn-p btn-full" onclick="sw('S-wizard-1')">Get started</button>
+      <div class="switch-link"><a onclick="doLogout()">Sign out</a></div>
+    </div>
+  </div>
+</div>
+
 <div class="sc" id="S-wizard-1">
   <div class="wiz-wrap">
     <div class="wiz-box">
@@ -238,6 +249,11 @@
         Payouts
       </div>
 
+      <div class="ap-nav-item" data-tab="products" onclick="apShowTab('products')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M3 8L12 3L21 8V16L12 21L3 16V8Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M3 8L12 13L21 8" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 13V21" stroke="currentColor" stroke-width="2"/></svg>
+        Products
+      </div>
+
       <div class="ap-nav-section-label">Settings</div>
       <div class="ap-nav-item ap-nav-subitem" data-tab="profile" onclick="apShowTab('profile')">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/><path d="M4 21C4 16.58 7.58 13 12 13C16.42 13 20 16.58 20 21" stroke="currentColor" stroke-width="2"/></svg>
@@ -373,6 +389,19 @@
         </div>
       </div>
 
+      <div class="ap-tab-panel" id="tab-products">
+        <div class="ap-header-row">
+          <div>
+            <p class="ap-page-title" style="margin-bottom:3px;">Products</p>
+            <p class="ap-page-sub" style="margin-bottom:0;">Copy shareable link your referral code applies automatically.</p>
+          </div>
+          <input type="text" class="ap-product-search" id="ap-product-search" placeholder="Search trip name" oninput="apFilterProducts(this.value)">
+        </div>
+        <div class="ap-trip-groups" id="ap-products-grid">
+          <div class="ap-empty"><p class="ap-empty-title">Loading...</p></div>
+        </div>
+      </div>
+
       <div class="ap-tab-panel" id="tab-profile">
         <p class="ap-page-title">Profile</p>
         <p class="ap-page-sub">Your personal details.</p>
@@ -477,6 +506,9 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/25.2.0/build/js/intlTelInputWithUtils.min.js"></script>
+<script id="pageData" type="application/json">
+{"csrf_token": "{{ csrf_token }}"}
+</script>
 <script src="/assets/affiliate/js/affiliate-portal.js"></script>
 </body>
 </html>
