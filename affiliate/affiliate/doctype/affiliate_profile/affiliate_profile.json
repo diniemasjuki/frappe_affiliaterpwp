@@ -131,7 +131,8 @@
    "fieldname": "referral_code",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Referral Code"
+   "label": "Referral Code",
+   "length": 8
   },
   {
    "fieldname": "last_referral_code_change",
@@ -200,7 +201,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-25 23:29:41.442355",
+ "modified": "2026-08-10 09:30:51.290801",
  "modified_by": "Administrator",
  "module": "Affiliate",
  "name": "Affiliate Profile",

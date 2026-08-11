@@ -925,24 +925,18 @@ async function loadProducts() {
   }
 }
 
-function buildProductUrl(packageId) {
+function buildProductUrl(tripId) {
+  // Guna param bersih '?trip=<TRIP_ID>' (Trip sahaja — bukan Package/Date)
+  // — booking.js's deep-link priority chain auto-pilih Trip dan biarkan
+  // customer pilih Package + Date sendiri di wizard. Sebelum ni guna
+  // '?trip_master=' (mekanisme LAMA yang perlukan trip_group_date SEKALI
+  // untuk berfungsi) — link peringkat-Trip-sahaja dari sini senyap gagal
+  // sebab tiada trip_group_date untuk dihantar sekali. '?trip=' sekarang
+  // ada laluan sendiri di booking.js untuk kes Trip-sahaja ni.
   var code = (PORTAL_DATA && PORTAL_DATA.profile.referral_code) || '';
-  var url = PRODUCTS_BASE_URL + '/booking/?trip=' + encodeURIComponent(packageId);
+  var url = PRODUCTS_BASE_URL + '/booking/?trip=' + encodeURIComponent(tripId);
   if (code) url += '&sp=' + encodeURIComponent(code);
   return url;
-}
-
-function groupByTrip(list) {
-  var groups = [];
-  var byTrip = {};
-  list.forEach(function(p, idx) {
-    if (!byTrip[p.trip_id]) {
-      byTrip[p.trip_id] = { trip_id: p.trip_id, trip_name: p.trip_name, trip_image: p.trip_image, rows: [] };
-      groups.push(byTrip[p.trip_id]);
-    }
-    byTrip[p.trip_id].rows.push(idx);
-  });
-  return groups;
 }
 
 function renderProducts(list) {
@@ -954,51 +948,20 @@ function renderProducts(list) {
     return;
   }
 
-  var groups = groupByTrip(list);
-
-  el.innerHTML = groups.map(function(g, gi) {
-    var img = g.trip_image
-      ? '<img src="' + g.trip_image + '" alt="">'
+  el.innerHTML = list.map(function(p, idx) {
+    var img = p.trip_image
+      ? '<img src="' + p.trip_image + '" alt="">'
       : '<svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M3 8L12 3L21 8V16L12 21L3 16V8Z" stroke="#B0AC9F" stroke-width="1.6"/></svg>';
-
-    var rowsHtml = g.rows.map(function(idx) {
-      var p = list[idx];
-      var copyLabel = hasCode ? 'Copy link' : 'Code pending';
-      return '<div class="ap-product-row">' +
-        '<div class="ap-product-row-main">' +
-          '<div>' +
-            '<p class="ap-product-row-title">' + p.package_title + '</p>' +
-            (p.package_type ? '<span class="ap-badge ap-badge-neutral">' + p.package_type + '</span>' : '') +
-          '</div>' +
-          '<button class="btn btn-outline ap-product-copy-btn" data-copy="' + idx + '"' + (hasCode ? '' : ' disabled') + '>' + copyLabel + '</button>' +
-        '</div>' +
-      '</div>';
-    }).join('');
-
-    var pkgWord = g.rows.length === 1 ? 'package' : 'packages';
+    var copyLabel = hasCode ? 'Copy link' : 'Code pending';
 
     return '<div class="ap-trip-group">' +
       '<div class="ap-trip-group-image">' + img + '</div>' +
       '<div class="ap-trip-group-body">' +
-        '<p class="ap-trip-group-title">' + g.trip_name + '</p>' +
-        '<button class="ap-trip-group-toggle" data-toggle="' + gi + '">' +
-          '<span>' + g.rows.length + ' ' + pkgWord + '</span>' +
-          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-        '</button>' +
-        '<div class="ap-trip-group-packages" data-packages="' + gi + '">' + rowsHtml + '</div>' +
+        '<p class="ap-trip-group-title">' + p.trip_name + '</p>' +
+        '<button class="btn btn-outline ap-product-copy-btn" data-copy="' + idx + '"' + (hasCode ? '' : ' disabled') + '>' + copyLabel + '</button>' +
       '</div>' +
     '</div>';
   }).join('');
-
-  el.querySelectorAll('[data-toggle]').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var gi = btn.getAttribute('data-toggle');
-      var panel = el.querySelector('[data-packages="' + gi + '"]');
-      var open = panel.classList.contains('open');
-      panel.classList.toggle('open', !open);
-      btn.classList.toggle('open', !open);
-    });
-  });
 
   el.querySelectorAll('[data-copy]').forEach(function(btn) {
     if (btn.disabled) return;
