@@ -22,6 +22,7 @@ class AffiliateProfile(Document):
 		address: DF.SmallText | None
 		available_balance: DF.Currency
 		bank_name: DF.Data | None
+		commission_base: DF.Literal["", "Gross", "Nett"] | None
 		commission_rate: DF.Percent
 		date_of_birth: DF.Date | None
 		document_id: DF.Attach | None

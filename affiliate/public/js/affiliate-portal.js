@@ -50,7 +50,7 @@ function fmt(n) {
   return 'RM' + (parseFloat(n) || 0).toFixed(2);
 }
 
-// Token dibaca dari pageData (rujuk www/affiliate-portal.py) — bukan dari
+// Token dibaca dari pageData (rujuk www/affiliate.py) — bukan dari
 // window.frappe.csrf_token, sebab page ni standalone www page yang tak
 // semestinya load bundle Desk yang set global tu, dan cookie 'csrftoken'
 // browser tak reliable disegerakkan lepas login_manager.login_as() dalam
@@ -131,7 +131,7 @@ async function signInWithGoogle() {
   hideError('login-error');
   try {
     var authUrl = await API('affiliate.api.portal_api.get_google_login_url', {
-      redirect_to: '/affiliate-portal',
+      redirect_to: '/affiliate',
     });
     window.location.href = authUrl;
   } catch (e) {
@@ -925,17 +925,16 @@ async function loadProducts() {
   }
 }
 
-function buildProductUrl(tripId) {
-  // Guna param bersih '?trip=<TRIP_ID>' (Trip sahaja — bukan Package/Date)
-  // — booking.js's deep-link priority chain auto-pilih Trip dan biarkan
-  // customer pilih Package + Date sendiri di wizard. Sebelum ni guna
-  // '?trip_master=' (mekanisme LAMA yang perlukan trip_group_date SEKALI
-  // untuk berfungsi) — link peringkat-Trip-sahaja dari sini senyap gagal
-  // sebab tiada trip_group_date untuk dihantar sekali. '?trip=' sekarang
-  // ada laluan sendiri di booking.js untuk kes Trip-sahaja ni.
+function buildProductUrl(route) {
+  // Pautan affiliate menuju ke page detail trip (/<route>) — BUKAN terus ke
+  // wizard booking. Dari page detail, customer pilih date + package, klik
+  // [Book Now], dan trip_detail.js rambat ?sp= ke /booknow (via bnw_cart +
+  // URL param) supaya kod affiliate tersimpan pada booking. Sebelum ni link
+  // menuju ke /booking/?trip=<ID> (halaman legacy) yang bypass page detail.
   var code = (PORTAL_DATA && PORTAL_DATA.profile.referral_code) || '';
-  var url = PRODUCTS_BASE_URL + '/booking/?trip=' + encodeURIComponent(tripId);
-  if (code) url += '&sp=' + encodeURIComponent(code);
+  if (!route) return '';
+  var url = PRODUCTS_BASE_URL + '/' + route.replace(/^\/+/, '');
+  if (code) url += (url.indexOf('?') > -1 ? '&' : '?') + 'sp=' + encodeURIComponent(code);
   return url;
 }
 
@@ -967,7 +966,7 @@ function renderProducts(list) {
     if (btn.disabled) return;
     btn.addEventListener('click', function() {
       var idx = btn.getAttribute('data-copy');
-      navigator.clipboard.writeText(buildProductUrl(list[idx].name));
+      navigator.clipboard.writeText(buildProductUrl(list[idx].route));
       var original = btn.textContent;
       btn.textContent = 'Copied';
       setTimeout(function() { btn.textContent = original; }, 1400);

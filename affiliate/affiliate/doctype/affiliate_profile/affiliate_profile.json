@@ -26,6 +26,7 @@
   "referral_code",
   "last_referral_code_change",
   "commission_rate",
+  "commission_base",
   "column_break_kpcj",
   "total_sales",
   "total_commission",
@@ -144,6 +145,13 @@
    "fieldname": "commission_rate",
    "fieldtype": "Percent",
    "label": "Commission Rate(%)"
+  },
+  {
+   "description": "Leave blank to use the default Commission Base from Affiliate Settings. Set explicitly to override the base for this affiliate only.",
+   "fieldname": "commission_base",
+   "fieldtype": "Select",
+   "label": "Commission Base (override)",
+   "options": "\nGross\nNett"
   },
   {
    "fieldname": "column_break_kpcj",

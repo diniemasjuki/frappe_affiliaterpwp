@@ -10,9 +10,15 @@
   "affiliate",
   "sales_order",
   "sales_invoice",
+  "booking",
   "column_break_pakj",
   "commission_amount",
+  "commission_rate",
+  "commission_base",
   "status",
+  "reversal_section",
+  "is_reversal",
+  "reverses",
   "invoices_section",
   "sales_invoices"
  ],
@@ -37,6 +43,13 @@
    "read_only": 1
   },
   {
+   "fieldname": "booking",
+   "fieldtype": "Link",
+   "label": "Booking",
+   "options": "Booking",
+   "read_only": 1
+  },
+  {
    "fieldname": "column_break_pakj",
    "fieldtype": "Column Break"
   },
@@ -46,10 +59,42 @@
    "label": "Commission Amount"
   },
   {
+   "fieldname": "commission_rate",
+   "fieldtype": "Float",
+   "label": "Commission Rate (%)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "commission_base",
+   "fieldtype": "Select",
+   "label": "Commission Base",
+   "options": "Gross\nNett",
+   "read_only": 1
+  },
+  {
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
    "options": "Pending\nInvoiced\nApproved\nPaid\nDenied",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reversal_section",
+   "fieldtype": "Section Break",
+   "label": "Clawback / Reversal"
+  },
+  {
+   "default": 0,
+   "fieldname": "is_reversal",
+   "fieldtype": "Check",
+   "label": "Is Reversal",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reverses",
+   "fieldtype": "Link",
+   "label": "Reverses Commission",
+   "options": "Affiliate Commission",
    "read_only": 1
   },
   {

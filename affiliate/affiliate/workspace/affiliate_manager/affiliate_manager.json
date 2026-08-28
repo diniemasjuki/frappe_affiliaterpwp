@@ -16,7 +16,7 @@
  "link_to": "Affiliate Profile",
  "link_type": "DocType",
  "links": [],
- "modified": "2026-07-30 21:55:22.532919",
+ "modified": "2026-08-28 07:03:23.951317",
  "modified_by": "Administrator",
  "module": "Affiliate",
  "name": "Affiliate Manager",
@@ -36,7 +36,7 @@
    "icon": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQkVexxzbg3jvRGCioSPljjTfsjn7CWC45h3L40QZwXjQ&s=10",
    "label": "Portal Affiliate",
    "type": "URL",
-   "url": "/affiliate-portal"
+   "url": "/affiliate"
   }
  ],
  "sidebar_items": [
@@ -104,7 +104,7 @@
    "open_in_new_tab": 1,
    "show_arrow": 0,
    "type": "Link",
-   "url": "/affiliate-portal"
+   "url": "/affiliate"
   }
  ],
  "standard": 1,

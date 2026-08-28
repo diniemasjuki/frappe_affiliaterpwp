@@ -35,6 +35,7 @@ Lifecycle (five stages, matching Affiliate Commission's status options):
 """
 
 import frappe
+from frappe.utils import flt
 
 # These are hardcoded, not admin-configurable, deliberately: a cancelled
 # or returned sale should never count as earned commission no matter
@@ -108,6 +109,84 @@ def _resolve_si_status(si_status: str) -> str | None:
 	return "Invoiced"
 
 
+def _resolve_commission_base(affiliate_name: str) -> str:
+	"""Returns 'Gross' or 'Nett' - the basis commission is calculated on
+	for this affiliate. An explicit override on the Affiliate Profile wins;
+	otherwise the Affiliate Settings default applies; otherwise 'Gross'.
+
+	Gross = commission on the pre-discount total (sum of positive line
+	items, before referral/voucher discounts reduce it). Nett = ERPNext's
+	native total_commission field, which only holds a value once the
+	linked travel items have 'Grant Commission' enabled.
+	"""
+	base = frappe.db.get_value("Affiliate Profile", affiliate_name, "commission_base")
+	if base in ("Gross", "Nett"):
+		return base
+
+	base = frappe.db.get_single_value("Affiliate Settings", "commission_base")
+	return base if base in ("Gross", "Nett") else "Gross"
+
+
+def _compute_commission_amount(so_doc, affiliate_name: str) -> tuple[float, str, float]:
+	"""Computes the commission amount for a Sales Order against the given
+	affiliate, returning (amount, base, rate).
+
+	- Gross: sum of positive base_net_amount line items (excludes the
+	  negative referral/voucher discount lines) x the affiliate's rate.
+	  This is independent of ERPNext's grant_commission flag, so it works
+	  even before the travel items are configured for native commission.
+	- Nett: ERPNext's native total_commission, which equals
+	  (grant_commission-flagged base_net_amount x rate). Requires the
+	  travel items to have Grant Commission enabled to be non-zero.
+
+	The rate always comes from Affiliate Profile.commission_rate - the
+	system's source of truth, kept in step with the linked Sales Partner
+	by affiliate_profile._sync_to_sales_partner - rather than the Sales
+	Order's own commission_rate field, which a Desk user could override.
+	"""
+	base = _resolve_commission_base(affiliate_name)
+	rate = flt(frappe.db.get_value("Affiliate Profile", affiliate_name, "commission_rate"))
+
+	if base == "Nett":
+		amount = flt(so_doc.get("total_commission") or 0)
+	else:
+		base_amount = sum(
+			flt(item.get("base_net_amount"))
+			for item in (so_doc.get("items") or [])
+			if flt(item.get("base_net_amount")) > 0
+		)
+		amount = flt(base_amount * rate / 100.0)
+
+	return amount, base, rate
+
+
+def _recompute_amount(commission_name: str, so_name: str):
+	"""Recalculates commission_amount from the Sales Order's current line
+	items, in case items or discounts changed after the commission was
+	first created. Only writes when the value actually changes, and
+	refreshes the affiliate's cached totals afterwards so a corrected
+	amount is reflected in the dashboard balance. Reversal rows
+	(is_reversal=1) are never passed here - their amount is fixed.
+	"""
+	so = frappe.get_doc("Sales Order", so_name)
+	affiliate_name = frappe.db.get_value(
+		"Affiliate Commission", commission_name, "affiliate"
+	)
+	amount, base, rate = _compute_commission_amount(so, affiliate_name)
+
+	current = flt(
+		frappe.db.get_value("Affiliate Commission", commission_name, "commission_amount")
+	)
+	if current != flt(amount):
+		frappe.db.set_value(
+			"Affiliate Commission",
+			commission_name,
+			{"commission_amount": amount, "commission_rate": rate, "commission_base": base},
+		)
+		if affiliate_name:
+			update_affiliate_cached_totals(affiliate_name)
+
+
 def create_commission_if_eligible(doc, method=None):
 	"""Creates the initial Affiliate Commission row the first time a
 	submitted Sales Order with a sales_partner is saved. Guarded
@@ -132,7 +211,9 @@ def create_commission_if_eligible(doc, method=None):
 	if not doc.sales_partner:
 		return
 
-	if frappe.db.exists("Affiliate Commission", {"sales_order": doc.name}):
+	if frappe.db.exists(
+		"Affiliate Commission", {"sales_order": doc.name, "is_reversal": 0}
+	):
 		return
 
 	affiliate_name = frappe.db.get_value(
@@ -145,13 +226,17 @@ def create_commission_if_eligible(doc, method=None):
 		return
 
 	initial_status = _resolve_so_status(doc.status) or "Pending"
+	amount, base, rate = _compute_commission_amount(doc, affiliate_name)
 
 	frappe.get_doc(
 		{
 			"doctype": "Affiliate Commission",
 			"affiliate": affiliate_name,
 			"sales_order": doc.name,
-			"commission_amount": doc.total_commission or 0,
+			"booking": doc.get("custom_booking"),
+			"commission_amount": amount,
+			"commission_rate": rate,
+			"commission_base": base,
 			"status": initial_status,
 		}
 	).insert(ignore_permissions=True)
@@ -167,10 +252,15 @@ def create_commission_if_eligible(doc, method=None):
 
 def sync_from_sales_order(doc, method=None):
 	commission_name = frappe.db.get_value(
-		"Affiliate Commission", {"sales_order": doc.name}, "name"
+		"Affiliate Commission", {"sales_order": doc.name, "is_reversal": 0}, "name"
 	)
 	if not commission_name:
 		return
+
+	# Recalculate the commissionable amount from the SO's current items -
+	# done before the SI-priority early return below so an SO edit still
+	# corrects the amount even once an invoice exists.
+	_recompute_amount(commission_name, doc.name)
 
 	# If this commission already has a Sales Invoice linked, the SI status
 	# takes priority - don't let a Sales Order status change downgrade it.
@@ -193,7 +283,7 @@ def sync_from_sales_invoice(doc, method=None):
 		return
 
 	commission_name = frappe.db.get_value(
-		"Affiliate Commission", {"sales_order": sales_order_name}, "name"
+		"Affiliate Commission", {"sales_order": sales_order_name, "is_reversal": 0}, "name"
 	)
 	if not commission_name:
 		return
@@ -344,14 +434,20 @@ def _update_commission_status(commission_name: str, new_status: str):
 		# Once a commission is Paid, the affiliate has actually received
 		# this money into their bank account via a completed Payout -
 		# that's a real-world fact, not just a status label, and sync
-		# logic must never silently overwrite it. If the underlying
-		# Sales Order/Invoice is later cancelled or returned (e.g. a
-		# late chargeback or refund), that's a clawback situation an
-		# admin needs to consciously handle themselves (e.g. deducting
-		# it from a future payout, or contacting the affiliate directly)
-		# - not something this sync should quietly erase the record of
-		# by flipping "Paid" back to "Denied" as if the payment never
-		# happened.
+		# logic must never silently overwrite it by flipping "Paid" back
+		# to "Denied" as if the payment never happened.
+		#
+		# But if the underlying sale is now voided (Cancelled / Return /
+		# Credit Note Issued), that IS a clawback situation: the
+		# affiliate was paid for a sale that no longer stands. Rather
+		# than rewrite the Paid record, we create a separate reversing
+		# commission (negative amount) that reclaims the money from the
+		# affiliate's future balance. The original stays Paid so the
+		# audit trail of the actual payout remains intact. If auto
+		# clawback is disabled in Affiliate Settings, this is left
+		# entirely to manual admin handling.
+		if new_status == "Denied":
+			_maybe_create_reversal(commission_name)
 		return
 
 	affiliate_name = frappe.db.get_value(
@@ -365,6 +461,69 @@ def _update_commission_status(commission_name: str, new_status: str):
 		update_affiliate_cached_totals(affiliate_name)
 
 
+def _maybe_create_reversal(commission_name: str):
+	"""Clawback: when a Paid commission's underlying sale is voided,
+	creates a reversing Affiliate Commission (negative amount) so the
+	affiliate's balance is reduced by the amount that was overpaid.
+
+	Idempotent - if a reversal already exists for this commission
+	(determined via the `reverses` link), does nothing. Safe to call
+	repeatedly as the Sales Order/Invoice cycles through deny statuses.
+
+	The reversal is created with status "Paid" (not "Approved") so it is
+	never swept into a future Affiliate Payout by
+	get_unpaid_out_commissions - the money is being reclaimed, not paid
+	out again. It still counts in update_affiliate_cached_totals, which
+	sums Approved + Paid, so the negative amount reduces both
+	total_commission and available_balance immediately.
+
+	Note (v1 limitation): this is a full reversal. A partial refund
+	(e.g. half the sale returned) still triggers a full clawback here,
+	over-reclaiming. Partial/percentage clawback is a future
+	enhancement; for now an admin can manually adjust the reversal's
+	commission_amount.
+	"""
+	if not frappe.db.get_single_value("Affiliate Settings", "clawback_on_refund"):
+		return
+
+	if frappe.db.exists("Affiliate Commission", {"reverses": commission_name}):
+		return
+
+	original = frappe.db.get_value(
+		"Affiliate Commission",
+		commission_name,
+		[
+			"name",
+			"affiliate",
+			"sales_order",
+			"booking",
+			"commission_amount",
+			"commission_rate",
+			"commission_base",
+		],
+		as_dict=True,
+	)
+	if not original:
+		return
+
+	frappe.get_doc(
+		{
+			"doctype": "Affiliate Commission",
+			"affiliate": original.affiliate,
+			"sales_order": original.sales_order,
+			"booking": original.booking,
+			"commission_amount": -flt(original.commission_amount),
+			"commission_rate": original.commission_rate,
+			"commission_base": original.commission_base,
+			"status": "Paid",
+			"is_reversal": 1,
+			"reverses": original.name,
+		}
+	).insert(ignore_permissions=True)
+
+	update_affiliate_cached_totals(original.affiliate)
+
+
 def update_affiliate_cached_totals(affiliate_name: str):
 	"""Recalculates and stores total_sales/total_commission/available_balance
 	on the given Affiliate Profile. Only Approved and Paid commissions count
@@ -375,15 +534,25 @@ def update_affiliate_cached_totals(affiliate_name: str):
 	rows = frappe.get_all(
 		"Affiliate Commission",
 		filters={"affiliate": affiliate_name, "status": ["in", ["Approved", "Paid"]]},
-		fields=["sales_order", "commission_amount"],
+		fields=["sales_order", "commission_amount", "is_reversal"],
 	)
 
+	# Reversal rows carry a negative commission_amount, so they reduce
+	# total_commission naturally here.
 	total_commission = sum(r.commission_amount or 0 for r in rows)
 
 	total_sales = 0
 	for r in rows:
-		if r.sales_order:
-			total_sales += frappe.db.get_value("Sales Order", r.sales_order, "grand_total") or 0
+		if not r.sales_order:
+			continue
+		grand_total = frappe.db.get_value("Sales Order", r.sales_order, "grand_total") or 0
+		# A reversal claws back a sale already counted by its original
+		# (Paid) commission's row, so subtract the same grand_total back
+		# rather than adding it a second time.
+		if r.is_reversal:
+			total_sales -= grand_total
+		else:
+			total_sales += grand_total
 
 	paid_out = frappe.db.sql(
 		"""SELECT COALESCE(SUM(amount), 0)
@@ -468,7 +637,7 @@ def get_unpaid_out_commissions(affiliate: str) -> list:
 	"""
 	approved = frappe.get_all(
 		"Affiliate Commission",
-		filters={"affiliate": affiliate, "status": "Approved"},
+		filters={"affiliate": affiliate, "status": "Approved", "is_reversal": 0},
 		fields=["name", "commission_amount"],
 	)
 	if not approved:

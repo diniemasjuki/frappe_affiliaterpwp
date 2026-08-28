@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "mimosa-hook-status/v1",
+  "recordedAt": "2026-08-27T20:03:09.528Z",
+  "sessionId": "sess_f3d5a373-3445-4253-8b82-5efd186bc675",
+  "event": "PostToolUse",
+  "toolName": "Edit",
+  "file": "affiliate/www/affiliate-portal.py",
+  "outcome": "clear",
+  "coverage": "complete",
+  "findingCount": 0,
+  "durationMs": 17,
+  "hostState": "hook_complete",
+  "reportHint": ".mimosa/reports/"
+}

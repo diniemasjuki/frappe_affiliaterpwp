@@ -7,7 +7,7 @@ from affiliate.api.commission_sync import get_unpaid_out_commissions, generate_u
 
 
 @frappe.whitelist(allow_guest=True)
-def get_google_login_url(redirect_to: str = "/affiliate-portal") -> str:
+def get_google_login_url(redirect_to: str = "/affiliate") -> str:
 	"""Returns the fully-formed Google OAuth authorize URL (client_id,
 	redirect_uri, scope, and a CSRF state token all included), so the
 	portal's "Sign in with Google" button can redirect straight to
@@ -153,7 +153,7 @@ def get_dashboard_data() -> dict:
 	commissions = frappe.get_all(
 		"Affiliate Commission",
 		filters={"affiliate": profile.name},
-		fields=["name", "sales_order", "sales_invoice", "commission_amount", "status", "creation"],
+		fields=["name", "sales_order", "sales_invoice", "commission_amount", "status", "creation", "is_reversal"],
 		order_by="creation desc",
 	)
 
@@ -259,7 +259,7 @@ def get_commission_status() -> dict:
 	)
 	paid = frappe.get_all(
 		"Affiliate Commission",
-		filters={"affiliate": profile.name, "status": "Paid"},
+		filters={"affiliate": profile.name, "status": "Paid", "is_reversal": 0},
 		fields=["commission_amount"],
 	)
 
@@ -291,7 +291,7 @@ def get_performance(period: str = "week") -> dict:
 	"""
 	profile = get_logged_in_profile()
 
-	filters = {"affiliate": profile.name}
+	filters = {"affiliate": profile.name, "is_reversal": 0}
 	if period == "week":
 		filters["creation"] = [">=", frappe.utils.add_days(frappe.utils.nowdate(), -7)]
 	elif period == "month":
@@ -332,7 +332,7 @@ def get_referrals(filter: str = "all") -> dict:
 	- "invoiced": only commissions that have a linked Sales Invoice
 	- "denied": only commissions marked Denied
 	"""
-	filters = {"affiliate": get_logged_in_profile().name}
+	filters = {"affiliate": get_logged_in_profile().name, "is_reversal": 0}
 
 	if filter == "invoiced":
 		filters["sales_invoice"] = ["is", "set"]

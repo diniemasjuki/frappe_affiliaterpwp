@@ -16,7 +16,12 @@ class AffiliateCommission(Document):
 		from frappe.types import DF
 
 		affiliate: DF.Link | None
+		booking: DF.Link | None
 		commission_amount: DF.Currency
+		commission_base: DF.Literal["Gross", "Nett"]
+		commission_rate: DF.Float
+		is_reversal: DF.Check
+		reverses: DF.Link | None
 		sales_invoice: DF.Link | None
 		sales_invoices: DF.Table[AffiliateCommissionInvoice]
 		sales_order: DF.Link | None

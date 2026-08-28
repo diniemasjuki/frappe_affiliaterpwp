@@ -12,7 +12,10 @@ use_json_request_body = True
 # Apps
 # ------------------
 
-# required_apps = []
+# This app hooks into ERPNext's Sales Order / Sales Invoice / Payment
+# Entry (doc_events below) and creates/syncs native Sales Partner records,
+# so ERPNext must be installed first.
+required_apps = ["erpnext"]
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
@@ -275,6 +278,15 @@ require_type_annotated_api_methods = True
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
 
+
+# Website Redirects
+# ------------------
+# Portal affiliate dahulunya di /affiliate-portal, kini di /affiliate. URL
+# lama (bookmark, shortcut workspace yang belum sync semula) diarahkan ke
+# /affiliate. Aktif selepas bench restart (hooks dimuat semula ke proses).
+website_redirects = [
+	{"source": "/affiliate-portal", "target": "/affiliate"},
+]
 
 # Document Events (Affiliate module)
 # -----------------------------------

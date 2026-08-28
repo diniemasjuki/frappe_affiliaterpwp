@@ -10,6 +10,11 @@
   "referral_code_name_length",
   "default_commission_percent",
   "minimum_cashout",
+  "commission_calculation_section",
+  "commission_base",
+  "commission_on_addons",
+  "column_break_ccalc",
+  "clawback_on_refund",
   "commission_approval_section",
   "approve_commission_on_so_status",
   "approve_commission_on_si_status"
@@ -41,6 +46,37 @@
    "fieldname": "minimum_cashout",
    "fieldtype": "Currency",
    "label": "Minimum Cashout"
+  },
+  {
+   "fieldname": "commission_calculation_section",
+   "fieldtype": "Section Break",
+   "label": "Commission Calculation"
+  },
+  {
+   "default": "Gross",
+   "description": "Gross = commission on the pre-discount total (sum of positive line items, before referral/voucher discounts). Nett = ERPNext's native total_commission field, which requires the linked travel items to have \"Grant Commission\" enabled.",
+   "fieldname": "commission_base",
+   "fieldtype": "Select",
+   "label": "Commission Base",
+   "options": "Gross\nNett"
+  },
+  {
+   "default": 0,
+   "description": "If checked, Sales Orders for addons (Travel Addon / Travel Insurance) created from a booking also carry the booking's Sales Partner, so the affiliate earns commission on addon sales too. When unchecked, only the primary package Sales Order is attributed.",
+   "fieldname": "commission_on_addons",
+   "fieldtype": "Check",
+   "label": "Commission on Addons"
+  },
+  {
+   "fieldname": "column_break_ccalc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": 1,
+   "description": "When a commission already Paid is later voided (Sales Order/Invoice cancelled, returned, or credit-noted), automatically create a reversing commission (negative amount) to claw back the payout from the affiliate's balance. If unchecked, clawback is left entirely to manual admin handling.",
+   "fieldname": "clawback_on_refund",
+   "fieldtype": "Check",
+   "label": "Auto Clawback on Refund/Cancel"
   },
   {
    "fieldname": "commission_approval_section",

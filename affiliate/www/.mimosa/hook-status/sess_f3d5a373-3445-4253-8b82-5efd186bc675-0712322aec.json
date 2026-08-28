@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "mimosa-hook-status/v1",
+  "recordedAt": "2026-08-27T22:59:50.237Z",
+  "sessionId": "sess_f3d5a373-3445-4253-8b82-5efd186bc675",
+  "event": "PostToolUse",
+  "toolName": "Edit",
+  "file": "/home/frappe/frappe-bench/apps/affiliate/affiliate/hooks.py",
+  "outcome": "inconclusive",
+  "coverage": "partial",
+  "findingCount": 0,
+  "durationMs": 9,
+  "hostState": "hook_complete",
+  "reportHint": ".mimosa/reports/"
+}

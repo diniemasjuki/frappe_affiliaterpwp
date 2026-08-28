@@ -18,40 +18,70 @@ def get_products() -> dict:
 	"""
 	get_logged_in_profile()
 
-	rows = frappe.db.sql(
-		"""
-		SELECT DISTINCT
-			t.name  AS trip_id,
-			t.trip_name,
-			t.trip_image
-		FROM `tabTrip` t
-		WHERE t.status = 'Active'
-		  AND EXISTS (
-			  SELECT 1
-			  FROM `tabTrip Group Date` td
-			  WHERE td.trip = t.name
-				AND td.status = 'Active'
-				AND td.departure_date >= CURDATE()
-				AND EXISTS (
-					SELECT 1
-					FROM `tabTrip Package Group Date Select` sel
-					JOIN `tabTrip Package` tp ON tp.name = sel.parent
-					WHERE sel.trip_group_date = td.name
-					  AND tp.status = 'Active'
-				)
-		  )
-		ORDER BY t.trip_name ASC
-		""",
-		as_dict=True,
+	today = frappe.utils.today()
+
+	# A Trip is bookable when it has at least one active, upcoming group
+	# date that is itself linked to an active Trip Package (via the
+	# package's "Trip Package Group Date Select" child table). Built with
+	# ORM calls rather than raw SQL so it respects field renames and
+	# Frappe's permission layer instead of bypassing them.
+	active_packages = frappe.get_all(
+		"Trip Package", filters={"status": "Active"}, pluck="name"
+	)
+	if not active_packages:
+		return {"base_url": frappe.utils.get_url(), "products": []}
+
+	group_dates_with_active_package = set(
+		frappe.get_all(
+			"Trip Package Group Date Select",
+			filters={"parent": ["in", active_packages]},
+			pluck="trip_group_date",
+		)
+	)
+	if not group_dates_with_active_package:
+		return {"base_url": frappe.utils.get_url(), "products": []}
+
+	valid_trips = {
+		t
+		for t in frappe.get_all(
+			"Trip Group Date",
+			filters={
+				"name": ["in", list(group_dates_with_active_package)],
+				"status": "Active",
+				"departure_date": [">=", today],
+			},
+			pluck="trip",
+		)
+		if t
+	}
+	if not valid_trips:
+		return {"base_url": frappe.utils.get_url(), "products": []}
+
+	trips = frappe.get_all(
+		"Trip",
+		filters={
+			"name": ["in", list(valid_trips)],
+			"status": "Active",
+			# Hanya Trip yang published boleh dipaut — page detail trip
+			# (/<route>) melayan 404 kalau published=0, jadi pautan affiliate
+			# ke trip yang belum publish akan putus. published ialah gate yang
+			# betul: trip mesti boleh diakses awam sebelum affiliate boleh kongsi.
+			"published": 1,
+		},
+		fields=["name", "trip_name", "trip_image", "route"],
+		order_by="trip_name asc",
 	)
 
 	products = [
 		{
-			"name":       r.trip_id,
-			"trip_name":  r.trip_name or "",
-			"trip_image": r.trip_image or "",
+			"name":       t.name,
+			"trip_name":  t.trip_name or "",
+			"trip_image": t.trip_image or "",
+			# route (cth. "trip/percubaan-trip-cruise") — portal bina pautan
+			# affiliate ke page detail trip, bukan terus ke wizard booking.
+			"route":      t.route or "",
 		}
-		for r in rows
+		for t in trips
 	]
 
 	return {
