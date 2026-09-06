@@ -7,6 +7,10 @@ import frappe
 from frappe.model.document import Document
 from frappe.utils import random_string
 
+from affiliate.affiliate.doctype.affiliate_settings.affiliate_settings import (
+	REFERRAL_CODE_MAX_LENGTH,
+)
+
 
 class AffiliateProfile(Document):
 	# begin: auto-generated types
@@ -149,11 +153,30 @@ class AffiliateProfile(Document):
 	def _generate_unique_referral_code(self) -> str:
 		settings = frappe.get_cached_doc("Affiliate Settings")
 		prefix = settings.referral_code_prefix or "RC"
-		name_length = settings.referral_code_name_length or 6
+
+		# Defensive ceiling: referral_code is a varchar(8) field and this
+		# value is written via db_set() (which skips field validation), so
+		# a misconfigured prefix + name_length that overshoots would either
+		# be silently truncated by the DB or rejected in strict mode — both
+		# corrupt the code the affiliate is assigned. Affiliate Settings
+		# .validate() rejects such configs at save time, but clamp here too
+		# so the guarantee holds even if a bad value was written directly to
+		# the single-doctype row (bypassing that validation). At least one
+		# name character is always kept so the code isn't prefix-only.
+		max_name_length = max(1, REFERRAL_CODE_MAX_LENGTH - len(prefix))
+		name_length = settings.referral_code_name_length or max_name_length
+		name_length = min(name_length, max_name_length)
 
 		base_letters = re.sub(r"[^A-Z]", "", (self.full_name or "").upper())
 		base_letters = base_letters[:name_length].ljust(name_length, "0")
 		base_code = f"{prefix}{base_letters}"
+
+		# Final invariant: never hand back a code longer than the field can
+		# hold. Truncate from the right (keep the prefix intact, drop the
+		# tail name characters) so the prefix — the part every code from
+		# this site shares — always survives.
+		if len(base_code) > REFERRAL_CODE_MAX_LENGTH:
+			base_code = base_code[:REFERRAL_CODE_MAX_LENGTH]
 
 		candidate = base_code
 		suffix_chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"

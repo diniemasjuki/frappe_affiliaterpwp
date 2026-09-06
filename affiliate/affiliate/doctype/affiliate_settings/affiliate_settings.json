@@ -22,6 +22,7 @@
  "fields": [
   {
    "default": "RC",
+   "description": "Letters prefixed to every auto-generated referral code. Combined with the Name Length below, the total must not exceed 8 characters (the referral_code field's max length).",
    "fieldname": "referral_code_prefix",
    "fieldtype": "Data",
    "in_list_view": 1,
@@ -29,7 +30,8 @@
    "reqd": 1
   },
   {
-   "default": "8",
+   "default": "6",
+   "description": "Number of characters (derived from the affiliate's full name, padded with 0) that follow the prefix in an auto-generated referral code. Prefix length + this value must not exceed 8, or auto-generated codes would overflow the 8-character referral_code field.",
    "fieldname": "referral_code_name_length",
    "fieldtype": "Int",
    "in_list_view": 1,

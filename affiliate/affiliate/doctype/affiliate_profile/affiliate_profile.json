@@ -133,7 +133,8 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Referral Code",
-   "length": 8
+   "length": 8,
+   "unique": 1
   },
   {
    "fieldname": "last_referral_code_change",

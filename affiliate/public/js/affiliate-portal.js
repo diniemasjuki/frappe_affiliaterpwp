@@ -241,19 +241,27 @@ async function submitWizard1() {
 }
 
 async function uploadWizardDocument(file) {
+  // Posts the file to our own whitelisted endpoint
+  // (affiliate.api.portal_api.upload_affiliate_document) rather than
+  // /api/method/upload_file. The generic endpoint enforces Frappe's
+  // File-specific has_permission gate, which denies create on an
+  // unattached private file to any non-Administrator (owner is only set
+  // during db_insert, after the create check) - so affiliates were
+  // 403-blocked at step 2. Our endpoint saves the File with
+  // ignore_permissions, scoped to the caller's own profile. Returns the
+  // file_url string directly as `message`.
   var formData = new FormData();
   formData.append('file', file);
-  formData.append('is_private', 1);
 
-  var res = await fetch('/api/method/upload_file', {
+  var res = await fetch('/api/method/affiliate.api.portal_api.upload_affiliate_document', {
     method: 'POST',
     headers: { 'X-Frappe-CSRF-Token': getCsrfToken() },
     credentials: 'include',
     body: formData,
   });
   var data = await res.json();
-  if (!res.ok || !data.message) throw new Error('File upload failed.');
-  return data.message.file_url;
+  if (!res.ok || !data.message) throw new Error(extractErrorMessage(data) || 'File upload failed.');
+  return data.message;
 }
 
 async function submitWizard2() {

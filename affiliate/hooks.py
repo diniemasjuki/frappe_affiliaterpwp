@@ -102,8 +102,7 @@ required_apps = ["erpnext"]
 # Installation
 # ------------
 
-# before_install = "affiliate.install.before_install"
-# after_install = "affiliate.install.after_install"
+after_install = "affiliate.install.after_install"
 
 # Uninstallation
 # ------------

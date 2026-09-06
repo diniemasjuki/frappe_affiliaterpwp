@@ -508,6 +508,55 @@ def submit_wizard_step1(
 
 
 @frappe.whitelist()
+def upload_affiliate_document() -> str:
+	"""Receives the ID-document upload from wizard step 2 and stores it as
+	a private File attached to the calling affiliate's own Affiliate
+	Profile, returning its file_url for submit_wizard_step2 to persist.
+
+	Replaces the portal's earlier bare POST to /api/method/upload_file,
+	which sent only the file + is_private (no doctype/docname). That
+	generic endpoint builds an *unattached* private File and then calls
+	doc.save(ignore_permissions=False); Frappe's File-specific
+	has_permission gate denies `create` on an unattached, private,
+	not-yet-owned file to any non-Administrator (the owner field is only
+	set during db_insert, AFTER the create-permission check), so every
+	non-admin affiliate hit a 403 "You need the 'create' permission on
+	File" and could never get past step 2. Attaching to the profile would
+	not help either, because the Affiliate role is deliberately granted NO
+	direct permission on Affiliate Profile - all profile mutations flow
+	through these validated, ignore_permissions endpoints by design. This
+	endpoint keeps that controlled-access design: it runs as the logged-in
+	affiliate, resolves their own profile (a stranger's profile name can't
+	be supplied - there's no parameter for it), validates the mime type,
+	and saves the File with ignore_permissions so the File gate is
+	satisfied while the attachment still scopes the document to the
+	caller's own profile.
+	"""
+	if "file" not in frappe.request.files:
+		frappe.throw(_("No file received."))
+
+	upload = frappe.request.files["file"]
+	content_type = getattr(upload, "mimetype", "") or ""
+	if not (content_type.startswith("image/") or content_type == "application/pdf"):
+		frappe.throw(_("Please upload an image or PDF file."))
+
+	profile = get_logged_in_profile()
+
+	doc = frappe.get_doc(
+		{
+			"doctype": "File",
+			"attached_to_doctype": "Affiliate Profile",
+			"attached_to_name": profile.name,
+			"file_name": upload.filename,
+			"is_private": 1,
+			"content": upload.stream.read(),
+		}
+	)
+	doc.save(ignore_permissions=True)
+	return doc.file_url
+
+
+@frappe.whitelist()
 def submit_wizard_step2(national_id: str, document_id: str) -> dict:
 	profile = get_logged_in_profile()
 	profile.national_id = national_id
