@@ -15,7 +15,7 @@
  "link_to": "Affiliate Profile",
  "link_type": "DocType",
  "links": [],
- "modified": "2026-09-07 08:40:50.386373",
+ "modified": "2026-09-07 10:01:52.936162",
  "modified_by": "Administrator",
  "module": "Affiliate",
  "name": "Affiliate Manager",
@@ -29,7 +29,7 @@
    "role": "All"
   }
  ],
- "sequence_id": 38.0,
+ "sequence_id": 39.0,
  "shortcuts": [
   {
    "doc_view": "",
@@ -41,5 +41,5 @@
  ],
  "standard": 1,
  "title": "Affiliate Manager",
- "type": "Link"
+ "type": "Workspace"
 }

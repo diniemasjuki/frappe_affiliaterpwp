@@ -1,0 +1,24 @@
+{
+ "app": "affiliate",
+ "creation": "2026-09-07 10:05:43.245805",
+ "docstatus": 0,
+ "doctype": "Dock",
+ "idx": 0,
+ "items": [
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "biceps-flexed",
+   "link_to": "Affiliate Manager",
+   "link_type": "Sidebar",
+   "title": "Affiliate"
+  }
+ ],
+ "modified": "2026-09-07 10:42:59.759266",
+ "modified_by": "Administrator",
+ "mount_on": "travel_booking",
+ "name": "affiliate",
+ "owner": "Administrator",
+ "standard": 1,
+ "user": ""
+}
