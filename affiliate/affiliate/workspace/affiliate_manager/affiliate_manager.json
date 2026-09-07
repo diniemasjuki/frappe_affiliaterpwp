@@ -1,5 +1,4 @@
 {
- "app": "erpnext",
  "charts": [],
  "content": "[]",
  "creation": "2026-07-30 21:35:50.893977",
@@ -16,12 +15,13 @@
  "link_to": "Affiliate Profile",
  "link_type": "DocType",
  "links": [],
- "modified": "2026-08-28 07:03:23.951317",
+ "modified": "2026-09-07 08:40:50.386373",
  "modified_by": "Administrator",
  "module": "Affiliate",
  "name": "Affiliate Manager",
  "number_cards": [],
  "owner": "Administrator",
+ "parent_page": "",
  "public": 1,
  "quick_lists": [],
  "roles": [
@@ -36,74 +36,6 @@
    "icon": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQkVexxzbg3jvRGCioSPljjTfsjn7CWC45h3L40QZwXjQ&s=10",
    "label": "Portal Affiliate",
    "type": "URL",
-   "url": "/affiliate"
-  }
- ],
- "sidebar_items": [
-  {
-   "child": 0,
-   "collapsible": 1,
-   "default_workspace": 0,
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "Affiliate",
-   "link_to": "Affiliate Profile",
-   "link_type": "DocType",
-   "open_in_new_tab": 1,
-   "show_arrow": 0,
-   "type": "Link"
-  },
-  {
-   "child": 0,
-   "collapsible": 1,
-   "default_workspace": 0,
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "Affiliate Commission",
-   "link_to": "Affiliate Commission",
-   "link_type": "DocType",
-   "open_in_new_tab": 1,
-   "show_arrow": 0,
-   "type": "Link"
-  },
-  {
-   "child": 0,
-   "collapsible": 1,
-   "default_workspace": 0,
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "Affiliate Payout",
-   "link_to": "Affiliate Payout",
-   "link_type": "DocType",
-   "open_in_new_tab": 1,
-   "show_arrow": 0,
-   "type": "Link"
-  },
-  {
-   "child": 0,
-   "collapsible": 1,
-   "default_workspace": 0,
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "Affiliate Settings",
-   "link_to": "Affiliate Settings",
-   "link_type": "DocType",
-   "open_in_new_tab": 1,
-   "show_arrow": 0,
-   "type": "Link"
-  },
-  {
-   "child": 0,
-   "collapsible": 1,
-   "default_workspace": 0,
-   "icon": "user-star",
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "Affiliates Portal",
-   "link_type": "URL",
-   "open_in_new_tab": 1,
-   "show_arrow": 0,
-   "type": "Link",
    "url": "/affiliate"
   }
  ],
