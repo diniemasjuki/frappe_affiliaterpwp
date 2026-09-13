@@ -43,7 +43,100 @@ function sw(id) {
 
   if (id === 'S-wizard-1' && !itiWiz1) {
     itiWiz1 = initPhoneInput(document.getElementById('wiz1-phone'));
+    prefillPersonalInfo();
   }
+}
+
+// Personal info form (wizard step 1): full name di-prefill dari info
+// login (first + last) dan phone dari Contact/Customer yang dipautkan
+// ke akaun (pageData.registration). Medan tetap boleh diedit — prefill
+// sekali sahaja dan tak menulis-ganti apa yang user dah taip.
+function prefillPersonalInfo() {
+  var r = getRegistrationPrefill();
+  var nameEl = document.getElementById('wiz1-full-name');
+  if (nameEl && !nameEl.value && r.full_name) {
+    nameEl.value = r.full_name.toUpperCase();
+  }
+  var phoneEl = document.getElementById('wiz1-phone');
+  if (phoneEl && !phoneEl.value && r.phone) {
+    setPhoneValue(itiWiz1, phoneEl, r.phone);
+  }
+}
+
+// Session state di-inject dari server (rujuk www/affiliate.py pageData).
+function isGuestSession() {
+  return !_pageData.session_user || _pageData.session_user === 'Guest';
+}
+
+// Maklumat sedia ada pengguna login (dari Contact/User, disediakan di
+// www/affiliate.py) untuk skrin pengesahan pendaftaran.
+function getRegistrationPrefill() {
+  return (_pageData && _pageData.registration) || {};
+}
+
+// editable=false: nama dipaparkan read-only (maklumat lengkap sedia ada).
+// editable=true: nama tak lengkap — medan nama dibolehkan untuk dilengkap
+//kan, email tetap terkunci pada akaun session.
+function showConfirmRegistration(editable) {
+  var r = getRegistrationPrefill();
+  var first = document.getElementById('confirm-first-name');
+  var last = document.getElementById('confirm-last-name');
+  first.value = r.first_name || '';
+  last.value = r.last_name || '';
+  document.getElementById('confirm-email').value = r.email || _pageData.session_user;
+  [first, last].forEach(function(el) {
+    el.readOnly = !editable;
+    el.style.background = editable ? '' : '#FBF9F4';
+  });
+  document.getElementById('confirm-title').textContent = editable
+    ? 'Complete your details'
+    : 'Confirm your details';
+  document.getElementById('confirm-sub').textContent = editable
+    ? 'Add your name to join the affiliate program - no new password needed'
+    : 'These details are already on your account - confirm them to join the affiliate program';
+  sw('S-confirm');
+}
+
+async function doConfirmRegister() {
+  hideError('confirm-error');
+  var r = getRegistrationPrefill();
+  var firstName = document.getElementById('confirm-first-name').value.trim();
+  var lastName = document.getElementById('confirm-last-name').value.trim();
+
+  if (!firstName || !lastName) {
+    showError('confirm-error', 'Please fill in your first and last name.');
+    return;
+  }
+
+  var btn = document.getElementById('confirm-btn');
+  btn.textContent = 'Registering...';
+  btn.disabled = true;
+  try {
+    await API('affiliate.api.registration.register_affiliate', {
+      first_name: firstName,
+      last_name: lastName,
+      email: r.email || _pageData.session_user,
+    });
+    window.location.reload();
+  } catch (e) {
+    showError('confirm-error', e.message || 'Could not register. Please try again.');
+    btn.textContent = 'Confirm & register';
+    btn.disabled = false;
+  }
+}
+
+// Guest sahaja yang nampak sign-in form — pengguna berlogin tidak pernah
+// dilandingkan ke sini (mereka ke confirm screen / no-access).
+function showLoginForSession() {
+  sw('S-login');
+}
+
+// Pengguna berlogin yang tak boleh didaftarkan (role/profile dalam
+// keadaan pelik, akaun dimatikan): notis neutral, bukan sign-in form.
+function showNoAccess() {
+  var emailEl = document.getElementById('noaccess-email');
+  if (emailEl) emailEl.textContent = _pageData.session_user || '';
+  sw('S-no-access');
 }
 
 // Currency symbols reported by the API (never hardcoded here - the
@@ -65,6 +158,12 @@ function curSymbol(currency) {
 
 function fmt(n, currency) {
   return curSymbol(currency) + (parseFloat(n) || 0).toFixed(2);
+}
+
+// "5%" / "5.5%" - rates are stored as Percent and may carry decimals;
+// display without trailing zeros.
+function fmtRate(rate) {
+  return parseFloat(rate || 0) + '%';
 }
 
 // "≈ RM1,250.00" - display-only conversion into the affiliate's chosen
@@ -231,16 +330,27 @@ async function doRegister() {
   var firstName = document.getElementById('reg-first-name').value.trim();
   var lastName = document.getElementById('reg-last-name').value.trim();
   var email = document.getElementById('reg-email').value.trim();
-  var password = document.getElementById('reg-password').value;
-  var passwordConfirm = document.getElementById('reg-password-confirm').value;
+  var payload = { first_name: firstName, last_name: lastName, email: email };
 
-  if (!firstName || !lastName || !email || !password) {
+  if (!firstName || !lastName || !email) {
     showError('register-error', 'Please fill in all required fields.');
     return;
   }
-  if (password !== passwordConfirm) {
-    showError('register-error', 'Passwords do not match.');
-    return;
+
+  // Guest sahaja yang perlu password — logged-in user daftar guna akaun
+  // sedia ada (server abaikan/buang field password untuk path itu).
+  if (isGuestSession()) {
+    var password = document.getElementById('reg-password').value;
+    var passwordConfirm = document.getElementById('reg-password-confirm').value;
+    if (!password) {
+      showError('register-error', 'Please fill in all required fields.');
+      return;
+    }
+    if (password !== passwordConfirm) {
+      showError('register-error', 'Passwords do not match.');
+      return;
+    }
+    payload.password = password;
   }
 
   var btn = document.getElementById('register-btn');
@@ -248,17 +358,12 @@ async function doRegister() {
   btn.disabled = true;
 
   try {
-    await API('affiliate.api.registration.register_affiliate', {
-      first_name: firstName,
-      last_name: lastName,
-      email: email,
-      password: password,
-    });
+    await API('affiliate.api.registration.register_affiliate', payload);
     window.location.reload();
   } catch (e) {
     showError('register-error', e.message || 'Could not create your account.');
   } finally {
-    btn.textContent = 'Create account';
+    btn.textContent = isGuestSession() ? 'Create account' : 'Register as Affiliate';
     btn.disabled = false;
   }
 }
@@ -310,29 +415,200 @@ async function uploadWizardDocument(file) {
   return data.message;
 }
 
+// National ID / IC: huruf + nombor sahaja, uppercase - simbol dibuang
+// semasa menaip, dan diseragamkan semula di server (normalize_national_id).
+function sanitizeNationalIdValue(el) {
+  el.value = el.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function onWizardNationalIdInput() {
+  sanitizeNationalIdValue(document.getElementById('wiz2-national-id'));
+}
+
+// Auto-upload + OCR: bila fail dipilih, teruskan ke server dan jalankan
+// pengesanan AI supaya panel "details detected" siap sebelum user tekan
+// Continue. URL yang dah naik disimpan - submitWizard2 guna semula dan
+// tidak memuat-naik fail yang sama dua kali. WIZ2_SELECTION_SEQ memastikan
+// rantaian upload fail lama (yang resolve lewat) tidak menulis-ganti
+// keadaan fail baharu yang baru dipilih.
+var WIZ2_UPLOADED_URL = '';
+var WIZ2_EXTRACTED = null;
+var WIZ2_SELECTION_SEQ = 0;
+
+function escapeHtml(text) {
+  var div = document.createElement('div');
+  div.textContent = text == null ? '' : String(text);
+  return div.innerHTML;
+}
+
+function onWizardDocumentSelected(input) {
+  hideError('wiz2-error');
+  var status = document.getElementById('wiz2-upload-status');
+  var panel = document.getElementById('wiz2-extracted');
+  WIZ2_SELECTION_SEQ += 1;
+  var seq = WIZ2_SELECTION_SEQ;
+  var isStale = function() { return seq !== WIZ2_SELECTION_SEQ; };
+
+  WIZ2_UPLOADED_URL = '';
+  WIZ2_EXTRACTED = null;
+  panel.style.display = 'none';
+  document.getElementById('wiz2-verify-result').style.display = 'none';
+
+  if (!input.files.length) { status.textContent = ''; return; }
+
+  status.textContent = 'Uploading...';
+  uploadWizardDocument(input.files[0]).then(function(fileUrl) {
+    if (isStale()) return null;
+    WIZ2_UPLOADED_URL = fileUrl;
+    status.textContent = 'Uploaded. Reading your ID with AI...';
+    return API('affiliate.api.portal_api.extract_affiliate_id_document', { document_id: fileUrl });
+  }).then(function(res) {
+    if (isStale()) return;
+    if (!res || res.enabled === false) {
+      status.textContent = 'Uploaded.';
+      return;
+    }
+    if (res.error) {
+      status.textContent = 'Uploaded, but AI reading failed: ' + res.error;
+      return;
+    }
+    WIZ2_EXTRACTED = res.extracted || {};
+    renderExtractedPanel(WIZ2_EXTRACTED);
+    status.textContent = 'Uploaded and read. Check the details detected below.';
+    var icEl = document.getElementById('wiz2-national-id');
+    if (!icEl.value && WIZ2_EXTRACTED.national_id) {
+      icEl.value = WIZ2_EXTRACTED.national_id;
+      sanitizeNationalIdValue(icEl);
+    }
+  }).catch(function(e) {
+    if (isStale()) return;
+    // Upload mungkin sudah berjaya sebelum OCR gagal - jangan buang
+    // URL yang sah; submit boleh teruskan tanpa OCR.
+    if (WIZ2_UPLOADED_URL) {
+      status.textContent = 'Uploaded, but AI reading failed: ' + (e.message || 'unknown error.');
+    } else {
+      status.textContent = '';
+      showError('wiz2-error', e.message || 'File upload failed. Please try again.');
+    }
+  });
+}
+
+var EXTRACTED_FIELD_LABELS = {
+  full_name: 'Full name',
+  national_id: 'National ID / IC',
+  date_of_birth: 'Date of birth',
+  gender: 'Gender',
+  address: 'Address',
+};
+
+function renderExtractedPanel(extracted) {
+  var fieldsEl = document.getElementById('wiz2-extracted-fields');
+  var rows = [];
+  Object.keys(EXTRACTED_FIELD_LABELS).forEach(function(key) {
+    var value = (extracted[key] || '').toString().trim();
+    if (!value) return;
+    rows.push(
+      '<div style="display:flex;justify-content:space-between;gap:12px;font-size:13px;">' +
+        '<span style="color:#7D7A70;white-space:nowrap;">' + EXTRACTED_FIELD_LABELS[key] + '</span>' +
+        '<span style="font-weight:600;color:#111111;text-align:right;word-break:break-word;">' + escapeHtml(value) + '</span>' +
+      '</div>'
+    );
+  });
+
+  if (!rows.length) {
+    document.getElementById('wiz2-extracted').style.display = 'none';
+    return;
+  }
+
+  fieldsEl.innerHTML = rows.join('');
+  var applyBtn = document.getElementById('wiz2-apply-btn');
+  applyBtn.textContent = 'Use these details';
+  applyBtn.disabled = false;
+  document.getElementById('wiz2-extracted').style.display = 'block';
+}
+
+// "Use these details": tulis nilai yang AI baca dari dokumen terus ke
+// profil (server akan uppercase-kan nama) dan isi ruang IC yang masih
+// kosong. Medan yang kosong pada dokumen tidak disentuh.
+async function applyExtractedIdDetails() {
+  var btn = document.getElementById('wiz2-apply-btn');
+  var extracted = WIZ2_EXTRACTED || {};
+  var payload = {};
+
+  if (extracted.full_name) payload.full_name = extracted.full_name;
+  if (extracted.date_of_birth) payload.date_of_birth = extracted.date_of_birth;
+  if (extracted.gender) payload.gender = extracted.gender;
+  if (extracted.address) payload.address = extracted.address;
+
+  if (!Object.keys(payload).length) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Applying...';
+  try {
+    await API('affiliate.api.portal_api.update_settings', payload);
+    if (extracted.national_id) {
+      var icEl = document.getElementById('wiz2-national-id');
+      if (!icEl.value) {
+        icEl.value = extracted.national_id;
+        sanitizeNationalIdValue(icEl);
+      }
+    }
+    btn.textContent = 'Applied to your details';
+  } catch (e) {
+    btn.textContent = 'Use these details';
+    btn.disabled = false;
+    showError('wiz2-error', e.message || 'Could not apply the detected details.');
+  }
+}
+
+function showVerifyResult(verification) {
+  var el = document.getElementById('wiz2-verify-result');
+  var issues = verification.issues || [];
+  var html = '<p style="margin:0 0 6px;font-weight:700;">We could not confirm some details against your ID</p>';
+  issues.forEach(function(issue) {
+    var line = '<p style="margin:2px 0;">' + escapeHtml(issue.field || 'Field') + ': on your ID "' +
+      escapeHtml(issue.document_value || '-') + '", you entered "' + escapeHtml(issue.entered_value || '-') + '"';
+    if (issue.note) line += ' - ' + escapeHtml(issue.note);
+    html += line + '</p>';
+  });
+  html += '<p style="margin:6px 0 0;">Fix your details above and press Continue again, or continue anyway - our team does the final check.</p>';
+  html += '<button type="button" class="btn btn-outline" onclick="sw(\'S-wizard-3\')" style="margin-top:10px;">Continue anyway</button>';
+  el.innerHTML = html;
+  el.style.display = 'block';
+}
+
 async function submitWizard2() {
   hideError('wiz2-error');
   var nationalId = document.getElementById('wiz2-national-id').value.trim();
   var fileInput = document.getElementById('wiz2-document');
 
-  if (!nationalId || !fileInput.files.length) {
+  if (!nationalId || (!fileInput.files.length && !WIZ2_UPLOADED_URL)) {
     showError('wiz2-error', 'Please enter your ID number and upload a document.');
     return;
   }
 
   var btn = document.getElementById('wiz2-btn');
-  btn.textContent = 'Uploading...';
+  btn.textContent = 'Checking...';
   btn.disabled = true;
+  document.getElementById('wiz2-verify-result').style.display = 'none';
 
   try {
-    var fileUrl = await uploadWizardDocument(fileInput.files[0]);
-    await API('affiliate.api.portal_api.submit_wizard_step2', {
+    var fileUrl = WIZ2_UPLOADED_URL || await uploadWizardDocument(fileInput.files[0]);
+    var res = await API('affiliate.api.portal_api.submit_wizard_step2', {
       national_id: nationalId, document_id: fileUrl,
     });
+    var verification = res && res.verification;
+    if (verification && verification.status === 'Mismatch') {
+      // Nasihat, bukan pagar: biar pengguna betulkan atau teruskan -
+      // admin tetap buat keputusan akhir semasa approve.
+      btn.textContent = 'Continue';
+      btn.disabled = false;
+      showVerifyResult(verification);
+      return;
+    }
     sw('S-wizard-3');
   } catch (e) {
     showError('wiz2-error', e.message || 'Could not save. Please try again.');
-  } finally {
     btn.textContent = 'Continue';
     btn.disabled = false;
   }
@@ -414,25 +690,46 @@ async function skipWizard4() {
 }
 
 async function loadDashboard() {
-  try {
-    var data = await API('affiliate.api.portal_api.get_dashboard_data', {});
-    PORTAL_DATA = data;
+  var reg = getRegistrationPrefill();
 
-    if (data.newly_registered) {
-      sw('S-need-register');
-      return;
-    }
-
-    if (!data.wizard_complete) {
-      sw('S-wizard-1');
-      return;
-    }
-
-    renderDashboard();
-    sw('S-dashboard');
-  } catch (e) {
-    sw('S-login');
+  // Route dari state yang server render masa page load — dashboard API
+  // hanya dipanggil bila server tahu ia akan lulus, jadi bukan-affiliate
+  // tak lagi menghasilkan 403 dalam console.
+  if (!reg.logged_in) {
+    showLoginForSession();
+    return;
   }
+
+  if (reg.has_role && reg.has_profile) {
+    try {
+      var data = await API('affiliate.api.portal_api.get_dashboard_data', {});
+      PORTAL_DATA = data;
+
+      if (!data.wizard_complete) {
+        sw('S-wizard-1');
+        return;
+      }
+
+      renderDashboard();
+      sw('S-dashboard');
+    } catch (e) {
+      // Access berubah antara render dengan call (jarang) — jangan
+      // tunjuk sign-in form kepada sesiapa yang sudah berlogin.
+      showNoAccess();
+    }
+    return;
+  }
+
+  if (reg.eligible) {
+    showConfirmRegistration(false);
+    return;
+  }
+  if (reg.active) {
+    // Aktif tapi nama tak lengkap — skrin pengesahan versi boleh-edit.
+    showConfirmRegistration(true);
+    return;
+  }
+  showNoAccess();
 }
 
 function renderDashboard() {
@@ -463,6 +760,21 @@ function renderDashboard() {
     document.getElementById('ap-referral-code').style.display = 'none';
     document.getElementById('ap-referral-pending').style.display = 'block';
     document.getElementById('ap-copy-btn').style.display = 'none';
+  }
+
+  // Kadar komisyen semasa (override sendiri atau lalai laman - Selesai
+  // diselesaikan di pelayan dengan peraturan yang sama seperti enjin
+  // komisyen), di atas kad kod rujukan dan dalam tab Profil.
+  var rateEl = document.getElementById('ap-code-rate');
+  var profileRateEl = document.getElementById('ap-profile-commission-rate');
+  if (PORTAL_DATA.commission_rate > 0) {
+    rateEl.textContent = 'You earn ' + fmtRate(PORTAL_DATA.commission_rate) + ' commission on every sale';
+    rateEl.style.display = 'block';
+    profileRateEl.textContent = fmtRate(PORTAL_DATA.commission_rate) +
+      (PORTAL_DATA.commission_rate_is_custom ? ' (your rate)' : ' (standard rate)');
+  } else {
+    rateEl.style.display = 'none';
+    profileRateEl.textContent = '-';
   }
 
   // Summary cards: approx. total in the affiliate's chosen display
@@ -584,9 +896,13 @@ function renderReferrals(rows) {
   el.innerHTML = rows.map(function(c) {
     var rowClass = c.status === 'Denied' ? 'ap-row-card ap-row-denied' : 'ap-row-card';
     var date = (c.creation || '').split(' ')[0];
+    // Kadar sebenar yang direkodkan pada komisyen itu; fallback kepada
+    // kadar semasa dashboard untuk baris lama tanpa kadar tersimpan.
+    var rate = c.commission_rate > 0 ? c.commission_rate : (PORTAL_DATA && PORTAL_DATA.commission_rate) || 0;
+    var ratePart = rate > 0 ? ' &middot; ' + fmtRate(rate) + ' commission' : '';
     return '<div class="' + rowClass + '">' +
       '<div><p class="ap-row-title">' + c.sales_order + '</p>' +
-      '<p class="ap-row-sub">' + date + ' &middot; ' + fmt(c.sales_order_amount, c.sales_order_currency) + ' sale</p></div>' +
+      '<p class="ap-row-sub">' + date + ' &middot; ' + fmt(c.sales_order_amount, c.sales_order_currency) + ' sale' + ratePart + '</p></div>' +
       '<div style="display:flex;align-items:center;gap:12px;">' +
       '<span style="font-size:13px;font-weight:700;color:#111111;">' + fmt(c.commission_amount, c.currency) + '</span>' +
       '<span class="ap-badge ' + badgeClass(c.status) + '">' + formatStatusLabel(c.status) + '</span>' +
@@ -1115,5 +1431,15 @@ function apFilterProducts(query) {
     return !query || p.trip_name.toLowerCase().indexOf(query) > -1;
   }));
 }
+
+// Kadar komisyen lalai (disuntik server melalui pageData) pada subtitle
+// skrin pendaftaran — prospekt nampak angka sebelum mendaftar.
+(function() {
+  var defaultRate = parseFloat(_pageData.default_commission_percent) || 0;
+  if (defaultRate > 0) {
+    var el = document.getElementById('reg-sub');
+    if (el) el.textContent = 'Earn ' + fmtRate(defaultRate) + ' commission by referring customers';
+  }
+})();
 
 loadDashboard();

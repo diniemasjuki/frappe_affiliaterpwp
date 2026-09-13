@@ -39,8 +39,8 @@
 <div class="sc" id="S-register">
   <div class="auth-wrap">
     <div class="auth-box">
-      <div class="auth-title">Join the affiliate program</div>
-      <div class="auth-sub">Earn commission by referring customers</div>
+      <div class="auth-title" id="reg-title">Join the affiliate program</div>
+      <div class="auth-sub" id="reg-sub">Earn commission by referring customers</div>
       <div class="msg-error" id="register-error"><span id="register-error-msg"></span></div>
       <div class="f">
         <label class="lbl">First name</label>
@@ -54,27 +54,56 @@
         <label class="lbl">Email address</label>
         <input type="email" id="reg-email"/>
       </div>
-      <div class="f">
+      <div class="f" id="reg-password-row">
         <label class="lbl">Password</label>
         <input type="password" id="reg-password" placeholder="At least 8 characters"/>
         <div style="font-size:11px;color:#B0AC9F;margin-top:4px;">Use a mix of uppercase, lowercase and numbers - avoid common words or simple patterns.</div>
       </div>
-      <div class="f">
+      <div class="f" id="reg-password-confirm-row">
         <label class="lbl">Confirm password</label>
         <input type="password" id="reg-password-confirm"/>
       </div>
       <button class="btn btn-p btn-full" id="register-btn" onclick="doRegister()">Create account</button>
-      <div class="switch-link">Already have an account? <a onclick="sw('S-login')">Sign in</a></div>
+      <div class="switch-link" id="reg-switch-login">Already have an account? <a onclick="sw('S-login')">Sign in</a></div>
     </div>
   </div>
 </div>
 
-<div class="sc" id="S-need-register">
+<!-- Pengguna login + aktif tanpa role affiliate: signup form dilangkau.
+     Maklumat sedia ada dari akaun/Contact dipaparkan (read-only) untuk
+     dikonfirmasi sebelum register_affiliate() dipanggil. -->
+<div class="sc" id="S-confirm">
   <div class="auth-wrap">
     <div class="auth-box">
-      <div class="auth-title">Set up your affiliate profile</div>
-      <div class="auth-sub">This account isn't registered as an affiliate yet. It only takes a few steps to get your referral code and start earning commission.</div>
-      <button class="btn btn-p btn-full" onclick="sw('S-wizard-1')">Get started</button>
+      <div class="auth-title" id="confirm-title">Confirm your details</div>
+      <div class="auth-sub" id="confirm-sub">These details are already on your account - confirm them to join the affiliate program</div>
+      <div class="msg-error" id="confirm-error"><span id="confirm-error-msg"></span></div>
+      <div class="f">
+        <label class="lbl">First name</label>
+        <input type="text" id="confirm-first-name" readonly style="background:#FBF9F4;"/>
+      </div>
+      <div class="f">
+        <label class="lbl">Last name</label>
+        <input type="text" id="confirm-last-name" readonly style="background:#FBF9F4;"/>
+      </div>
+      <div class="f">
+        <label class="lbl">Email address</label>
+        <input type="email" id="confirm-email" readonly style="background:#FBF9F4;"/>
+      </div>
+      <button class="btn btn-p btn-full" id="confirm-btn" onclick="doConfirmRegister()">Confirm &amp; register</button>
+      <div class="switch-link">Not you? <a onclick="doLogout()">Sign out</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- Pengguna berlogin yang tak boleh didaftarkan (role/profile dalam
+     keadaan pelik, akaun dimatikan): skrin notis neutral — BUKAN sign-in
+     form, sebab mereka sudah pun berlogin. -->
+<div class="sc" id="S-no-access">
+  <div class="auth-wrap">
+    <div class="auth-box">
+      <div class="auth-title">No affiliate access</div>
+      <div class="auth-sub">The account <span id="noaccess-email"></span> doesn't have access to the affiliate portal.</div>
       <div class="switch-link"><a onclick="doLogout()">Sign out</a></div>
     </div>
   </div>
@@ -94,7 +123,7 @@
       <div class="msg-error" id="wiz1-error"><span id="wiz1-error-msg"></span></div>
       <div class="f">
         <label class="lbl">Full name</label>
-        <input type="text" id="wiz1-full-name"/>
+        <input type="text" id="wiz1-full-name" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()"/>
       </div>
       <div class="f">
         <label class="lbl">Phone number</label>
@@ -135,13 +164,23 @@
       <div class="msg-error" id="wiz2-error"><span id="wiz2-error-msg"></span></div>
       <div class="f">
         <label class="lbl">National ID / IC number</label>
-        <input type="text" id="wiz2-national-id"/>
+        <input type="text" id="wiz2-national-id" style="text-transform:uppercase;" oninput="onWizardNationalIdInput()"/>
+        <div style="font-size:11px;color:#B0AC9F;margin-top:4px;">Letters and numbers only - symbols are removed and everything is uppercased automatically.</div>
       </div>
       <div class="f">
         <label class="lbl">Upload ID document</label>
-        <input type="file" id="wiz2-document" accept="image/*,.pdf"/>
+        <input type="file" id="wiz2-document" accept="image/*,.pdf" onchange="onWizardDocumentSelected(this)"/>
         <div id="wiz2-upload-status" style="font-size:12px;color:#7D7A70;margin-top:6px;"></div>
       </div>
+      <div class="f" id="wiz2-extracted" style="display:none;">
+        <div style="background:#FBF9F4;border:1px solid #E4DECF;border-radius:8px;padding:12px 14px;">
+          <p style="font-size:12px;font-weight:700;letter-spacing:0.04em;color:#7D7A70;margin:0 0 8px;">DETAILS DETECTED ON YOUR ID</p>
+          <div id="wiz2-extracted-fields" style="display:grid;gap:4px;"></div>
+          <button type="button" class="btn btn-outline" id="wiz2-apply-btn" onclick="applyExtractedIdDetails()" style="margin-top:10px;width:100%;">Use these details</button>
+          <p style="font-size:11px;color:#B0AC9F;margin:6px 0 0;">Read automatically from your document. Check every line, then apply - this updates your profile with what was detected.</p>
+        </div>
+      </div>
+      <div id="wiz2-verify-result" style="display:none;margin-bottom:14px;font-size:13px;border-radius:8px;padding:10px 12px;background:#FDF3F0;border:1px solid #E5C4BC;color:#8A3A2B;"></div>
       <div class="wiz-nav-row">
         <button class="btn btn-outline" id="wiz2-back-btn" onclick="sw('S-wizard-1')">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -294,6 +333,7 @@
             <p class="ap-code-label">Your referral code</p>
             <p class="ap-code-value" id="ap-referral-code" style="display:none"></p>
             <p class="ap-code-pending" id="ap-referral-pending">Pending verification</p>
+            <p class="ap-code-rate" id="ap-code-rate" style="display:none"></p>
           </div>
           <button class="ap-copy-btn-dark" id="ap-copy-btn" onclick="apCopyCode()" style="display:none">Copy</button>
         </div>
@@ -414,8 +454,13 @@
         <div class="ap-settings-card ap-settings-form">
           <div class="msg-success" id="profile-saved">Saved.</div>
           <div class="f">
+            <label class="lbl">Commission rate</label>
+            <div class="ap-field-readonly" id="ap-profile-commission-rate">-</div>
+            <p class="ap-field-hint">Applied to every sale referred with your code. Managed by the admin.</p>
+          </div>
+          <div class="f">
             <label class="lbl">Full name</label>
-            <input type="text" id="set-full-name"/>
+            <input type="text" id="set-full-name" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()"/>
           </div>
           <div class="f">
             <label class="lbl">Phone number</label>
@@ -518,8 +563,8 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/25.2.0/build/js/intlTelInputWithUtils.min.js"></script>
 <script id="pageData" type="application/json">
-{"csrf_token": "{{ csrf_token }}"}
+{"csrf_token": "{{ csrf_token }}", "session_user": "{{ session_user }}", "user_fullname": "{{ user_fullname }}", "registration": {{ registration | tojson }}, "default_commission_percent": {{ default_commission_percent | tojson }}}
 </script>
-<script src="/assets/affiliate/js/affiliate-portal.js"></script>
+<script src="/assets/affiliate/js/affiliate-portal.js?v={{ portal_js_ver }}"></script>
 </body>
 </html>

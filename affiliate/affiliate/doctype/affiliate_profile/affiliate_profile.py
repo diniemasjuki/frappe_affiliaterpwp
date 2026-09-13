@@ -5,11 +5,26 @@ import re
 
 import frappe
 from frappe.model.document import Document
+from frappe.model.rename_doc import rename_doc as _rename_doc
 from frappe.utils import random_string
 
 from affiliate.affiliate.doctype.affiliate_settings.affiliate_settings import (
 	REFERRAL_CODE_MAX_LENGTH,
 )
+
+
+def normalize_national_id(value: str | None) -> str:
+	"""IC / National ID is stored as uppercase letters and digits only.
+
+	The wizard's input field already strips symbols as the affiliate
+	types (and uppercases them), but the guarantee has to hold no matter
+	how the value reaches the profile - the portal API, a Desk edit, a
+	data import - so this normalization also runs in validate() on every
+	save, mirroring _normalize_phone's "normalize once, at the doc level"
+	design. Symbols mean anything that is not a letter or a digit:
+	spaces, dashes ("-1234" suffix groups on MyKad), dots, slashes.
+	"""
+	return re.sub(r"[^A-Z0-9]", "", (value or "").upper())
 
 
 class AffiliateProfile(Document):
@@ -25,6 +40,9 @@ class AffiliateProfile(Document):
 		account_name: DF.Data | None
 		account_number: DF.Data | None
 		address: DF.SmallText | None
+		ai_extraction: DF.LongText | None
+		ai_verification_detail: DF.SmallText | None
+		ai_verification_status: DF.Literal["Not Verified", "Match", "Mismatch"]
 		available_balance: DF.Currency
 		available_balance_est: DF.Currency
 		balances: DF.Table[AffiliateCurrencyBalance]
@@ -63,6 +81,7 @@ class AffiliateProfile(Document):
 			)
 
 		self._normalize_phone()
+		self.national_id = normalize_national_id(self.national_id)
 
 	def _normalize_phone(self):
 		"""Store phone numbers as "+ISD-number" (e.g. "+60-123456788")
@@ -247,7 +266,13 @@ class AffiliateProfile(Document):
 			)
 
 		partner_name = self.full_name or self.email_id
-		if frappe.db.exists("Sales Partner", partner_name):
+		# partner_name is UNIQUE and Sales Partner is autoname
+		# field:partner_name, so "taken" can mean either the document
+		# name or the partner_name column - check both, they can drift
+		# apart on records renamed before this was handled correctly.
+		if frappe.db.exists("Sales Partner", partner_name) or frappe.db.exists(
+			"Sales Partner", {"partner_name": partner_name}
+		):
 			partner_name = f"{partner_name} ({self.name})"
 
 		partner_type = (
@@ -276,6 +301,16 @@ class AffiliateProfile(Document):
 
 		Only touches fields that actually differ, to avoid unnecessary
 		writes and unnecessary Sales Partner modification timestamps.
+
+		Renaming: Sales Partner is autoname field:partner_name and
+		partner_name carries a UNIQUE index, so a name change MUST go
+		through frappe.rename_doc - which updates the document name and
+		the autoname field together (and re-points every Link to the
+		partner). frappe.db.set_value on the partner_name column alone
+		would leave the document name behind: the two drift apart, and
+		because the name-based clash check no longer sees the "renamed"
+		record, the next verified affiliate with the same name got a
+		duplicate partner_name and blew up with a UniqueValidationError.
 		"""
 		if not self.sales_partner:
 			return
@@ -283,7 +318,7 @@ class AffiliateProfile(Document):
 		current = frappe.db.get_value(
 			"Sales Partner",
 			self.sales_partner,
-			["partner_name", "commission_rate", "referral_code"],
+			["name", "partner_name", "commission_rate", "referral_code"],
 			as_dict=True,
 		)
 		if not current:
@@ -294,19 +329,31 @@ class AffiliateProfile(Document):
 		if current.commission_rate != self.commission_rate:
 			updates["commission_rate"] = self.commission_rate
 
-		desired_name = self.full_name or self.email_id
-		if current.partner_name != desired_name:
-			# partner_name is unique - if the new name collides with a
-			# DIFFERENT Sales Partner record, disambiguate the same way
-			# _create_sales_partner() does, rather than letting the
-			# save fail outright.
-			clash = frappe.db.exists("Sales Partner", desired_name)
-			if clash and clash != self.sales_partner:
-				desired_name = f"{desired_name} ({self.name})"
-			updates["partner_name"] = desired_name
-
 		if self.referral_code and current.referral_code != self.referral_code:
 			updates["referral_code"] = self.referral_code
 
 		if updates:
 			frappe.db.set_value("Sales Partner", self.sales_partner, updates)
+
+		desired_name = self.full_name or self.email_id
+		if current.name != desired_name or current.partner_name != desired_name:
+			# partner_name is unique - if the new name collides with a
+			# DIFFERENT Sales Partner record (by document name or by the
+			# unique partner_name column), disambiguate the same way
+			# _create_sales_partner() does, rather than letting the
+			# save fail outright.
+			clash = frappe.db.exists("Sales Partner", desired_name) or frappe.db.exists(
+				"Sales Partner", {"partner_name": desired_name}
+			)
+			if clash and clash != self.sales_partner:
+				desired_name = f"{desired_name} ({self.name})"
+			if desired_name != self.sales_partner:
+				# The internal frappe.model.rename_doc.rename_doc (not the
+				# whitelisted frappe.rename_doc wrapper) so we can pass
+				# ignore_permissions - sync runs on the profile's behalf.
+				_rename_doc(
+					"Sales Partner",
+					self.sales_partner,
+					desired_name,
+					ignore_permissions=True,
+				)

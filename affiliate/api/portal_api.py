@@ -1,8 +1,13 @@
+import json
 import re
 
 import frappe
 from frappe import _
 
+from affiliate.affiliate.doctype.affiliate_profile.affiliate_profile import (
+	normalize_national_id,
+)
+from affiliate.api import ai_service
 from affiliate.api.commission_sync import (
 	generate_unique_bill_no,
 	get_unpaid_out_commissions_by_currency,
@@ -88,36 +93,15 @@ def _is_phone_validation_error(exc: Exception) -> bool:
 	return "Phone Number" in msg or "country code" in msg
 
 
-def get_logged_in_profile(auto_create: bool = False):
+def get_logged_in_profile():
 	"""Returns the Affiliate Profile doc for the current session user.
 
 	Raises frappe.PermissionError if there's no session (Guest) or if
-	the session user has no linked Affiliate Profile - UNLESS
-	auto_create=True, in which case a new Affiliate Profile is created
-	on the spot for whoever is currently authenticated (see
-	_create_profile_for_current_user for why).
-
-	auto_create is opt-in per caller, not a global default: only
-	get_dashboard_data() passes True, since loadDashboard() in the
-	portal JS is always the very first call made right after ANY
-	successful login (password or Google Sign-In) - that's the one
-	natural point where "an authenticated person with no Affiliate
-	Profile has reached this portal" should be treated as registration
-	intent. Every other endpoint (wizard steps, settings, etc.) keeps
-	the default False, since by the time those are called a profile
-	should already exist from the dashboard-load step.
-
-	When a profile IS freshly auto-created in this call, the returned
-	doc has `.flags.newly_created = True` set - callers that care (only
-	get_dashboard_data() does) can check this to tell "an existing
-	Frappe User (e.g. a past travel_booking customer) just landed here
-	for the first time and got silently enrolled" apart from "a
-	returning affiliate who registered on purpose but hasn't finished
-	the wizard yet" - the two cases look identical otherwise
-	(wizard_complete=False) but need different portal UX: the former
-	should see an explicit "you need to set up an affiliate profile"
-	screen before the wizard, not get dropped straight into wizard
-	step 1 with no explanation of why they're suddenly there.
+	the session user has no linked Affiliate Profile. A profile is only
+	ever created by register_affiliate() - an authenticated user without
+	one is treated as "not registered as an affiliate" and stays on the
+	portal's login form until they explicitly sign up through the
+	registration form.
 	"""
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Please sign in to continue."), frappe.PermissionError)
@@ -125,63 +109,13 @@ def get_logged_in_profile(auto_create: bool = False):
 	profile_name = frappe.db.get_value(
 		"Affiliate Profile", {"user": frappe.session.user}, "name"
 	)
-	newly_created = False
 	if not profile_name:
-		if auto_create:
-			profile_name = _create_profile_for_current_user()
-			newly_created = True
-		else:
-			frappe.throw(
-				_("Your account is not linked to an affiliate profile. Please contact support."),
-				frappe.PermissionError,
-			)
+		frappe.throw(
+			_("Your account is not registered as an affiliate yet. Please register first."),
+			frappe.PermissionError,
+		)
 
-	doc = frappe.get_doc("Affiliate Profile", profile_name)
-	doc.flags.newly_created = newly_created
-	return doc
-
-
-def _create_profile_for_current_user() -> str:
-	"""Creates a new Affiliate Profile for whoever is currently logged
-	in, whether they got there via the existing email/password
-	registration flow (register_affiliate, which already creates a
-	profile explicitly - so this path is really only exercised for
-	Google Sign-In and any other already-authenticated session that
-	reaches the portal without one) or Google Sign-In (Frappe's native
-	Social Login Key handles the OAuth exchange and creates/logs in the
-	frappe.User automatically - it has no idea an Affiliate Profile
-	should also exist, since that's specific to this app).
-
-	Deliberately does NOT restrict this to newly-created Users only -
-	an existing Frappe User (e.g. a past travel_management customer, or
-	staff) reaching this portal without an Affiliate Profile also gets
-	one created here. That's a deliberate choice: the portal itself is
-	the signal that someone wants to become an affiliate, regardless of
-	what else their account may already be used for.
-	"""
-	user_doc = frappe.get_doc("User", frappe.session.user)
-	full_name = user_doc.full_name or frappe.session.user
-
-	# Matches register_affiliate()'s role assignment for the
-	# password-registration path - keeps every affiliate consistently
-	# tagged with this role regardless of which door they came in
-	# through (password signup vs Google Sign-In vs any other
-	# already-authenticated session landing here).
-	if "Affiliate" not in {r.role for r in user_doc.roles}:
-		user_doc.append("roles", {"role": "Affiliate"})
-		user_doc.save(ignore_permissions=True)
-
-	profile = frappe.get_doc(
-		{
-			"doctype": "Affiliate Profile",
-			"user": frappe.session.user,
-			"email_id": frappe.session.user,
-			"full_name": full_name,
-			"status": "Pending Verification",
-		}
-	)
-	profile.insert(ignore_permissions=True)
-	return profile.name
+	return frappe.get_doc("Affiliate Profile", profile_name)
 
 
 @frappe.whitelist()
@@ -194,10 +128,35 @@ def get_dashboard_data() -> dict:
 	currency (exact per-sale figures), plus the per-currency balances
 	child table and the affiliate's preferred-display-currency
 	estimates (approx.) for the summary cards.
+
+	Registration gate: only a logged-in user carrying the Affiliate
+	role AND a linked Affiliate Profile gets past this call. The role is
+	only ever granted by register_affiliate() (the portal signup form),
+	so anyone else - Guest, or a logged-in customer - gets a
+	PermissionError, which loadDashboard() in the portal JS treats as
+	"show the login form".
 	"""
-	profile = get_logged_in_profile(auto_create=True)
+	if frappe.session.user == "Guest":
+		frappe.throw(_("Please sign in to continue."), frappe.PermissionError)
+
+	if "Affiliate" not in frappe.get_roles(frappe.session.user):
+		frappe.throw(
+			_("This account is not registered as an affiliate."),
+			frappe.PermissionError,
+		)
+
+	profile = get_logged_in_profile()
 
 	wizard_complete = bool(profile.national_id and profile.document_id)
+
+	# The affiliate's current commission rate: their own override when
+	# set, otherwise the site-wide default from Affiliate Settings - the
+	# same resolution _compute_commission_amount applies when a sale is
+	# recorded, so what the portal advertises is what commissions pay.
+	default_commission_percent = frappe.utils.flt(
+		frappe.get_cached_value("Affiliate Settings", None, "default_commission_percent")
+	)
+	commission_rate = frappe.utils.flt(profile.commission_rate) or default_commission_percent
 
 	commissions = frappe.get_all(
 		"Affiliate Commission",
@@ -269,7 +228,8 @@ def get_dashboard_data() -> dict:
 			"default_currency": profile.default_currency,
 		},
 		"wizard_complete": wizard_complete,
-		"newly_registered": bool(profile.flags.newly_created),
+		"commission_rate": commission_rate,
+		"commission_rate_is_custom": bool(frappe.utils.flt(profile.commission_rate)),
 		"company_currency": company_currency,
 		"default_currency": default_currency,
 		"currency_symbols": _currency_symbols(
@@ -517,7 +477,7 @@ def get_referrals(filter: str = "all") -> dict:
 	commissions = frappe.get_all(
 		"Affiliate Commission",
 		filters=filters,
-		fields=["name", "sales_order", "sales_invoice", "currency", "commission_amount", "status", "creation"],
+		fields=["name", "sales_order", "sales_invoice", "currency", "commission_amount", "commission_rate", "status", "creation"],
 		order_by="creation desc",
 	)
 
@@ -768,7 +728,9 @@ def submit_wizard_step1(
 	address: str,
 ) -> dict:
 	profile = get_logged_in_profile()
-	profile.full_name = full_name
+	# Nama dipaksa uppercase (form input pun force uppercase) supaya
+	# full_name dalam profil sentiasa seragam, apa jua yang dihantar.
+	profile.full_name = (full_name or "").strip().upper()
 	profile.phone = phone
 	profile.gender = gender
 	profile.date_of_birth = date_of_birth
@@ -832,12 +794,113 @@ def upload_affiliate_document() -> str:
 
 
 @frappe.whitelist()
+def extract_affiliate_id_document(document_id: str) -> dict:
+	"""AI OCR over the ID document the affiliate just uploaded in wizard
+	step 2. Returns the details read off the document (full name,
+	national ID, birthdate, gender, address) so the portal can show them
+	for one-click application to the profile, and persists the raw
+	extraction on the Affiliate Profile for the approving admin (and as
+	the cache submit_wizard_step2's verification reuses).
+
+	Runs against the CALLER's own profile only - the document is
+	resolved by file_url AND attached_to_name, so another affiliate's
+	document (or any unrelated file) can never be fed in by URL
+	guessing. Mirrors upload_affiliate_document's controlled-access
+	design: the Affiliate role has no direct Affiliate Profile
+	permission, all mutations flow through these validated endpoints.
+
+	Failures are returned as {"error": ...} rather than raised, so the
+	upload itself (which already succeeded) isn't mistaken for a
+	failure and the affiliate isn't blocked from continuing without AI.
+	"""
+	profile = get_logged_in_profile()
+
+	config = ai_service.get_ai_config()
+	if not config["enable_id_extraction"]:
+		return {"enabled": False}
+	if not config["configured"]:
+		return {
+			"enabled": True,
+			"error": _("AI is not configured on this site (no provider or API key in Affiliate Settings)."),
+		}
+
+	try:
+		data_url = ai_service.profile_document_data_url(profile.name, document_id)
+		extracted = ai_service.extract_id_data(data_url)
+	except (frappe.ValidationError, frappe.PermissionError, frappe.DoesNotExistError) as e:
+		return {"enabled": True, "error": str(e)}
+
+	profile.db_set("ai_extraction", json.dumps(extracted))
+	return {"enabled": True, "extracted": extracted}
+
+
+def _entered_details(profile) -> dict:
+	"""The affiliate's own filled-in details, in the same shape as an
+	ai_service extraction result, ready for the comparison call.
+	"""
+	return {
+		"full_name": profile.full_name or "",
+		"national_id": normalize_national_id(profile.national_id),
+		"date_of_birth": str(profile.date_of_birth or ""),
+		"gender": profile.gender or "",
+		"address": profile.address or "",
+	}
+
+
+def _run_ai_verification(profile) -> dict | None:
+	"""Compares the affiliate's entered details against their uploaded ID
+	document with AI, stores the verdict on the profile for the approving
+	admin, and returns it for the portal to show.
+
+	Returns None when verification is disabled, unconfigured, or there's
+	no document to compare against - a plain {"saved": True} response,
+	identical to the pre-AI behaviour. Runs the extraction first when the
+	cached one is missing (upload happens before this endpoint, so the
+	cache normally exists and this is only the fallback path) - the
+	extraction is the OCR input verification needs, and keeping it
+	cached means re-submitting step 2 never re-bills a vision call.
+	"""
+	config = ai_service.get_ai_config()
+	if not (config["enable_ai_verification"] and config["configured"]):
+		return None
+	if not profile.document_id:
+		return None
+
+	extracted = None
+	if profile.ai_extraction:
+		try:
+			extracted = json.loads(profile.ai_extraction)
+		except ValueError:
+			extracted = None
+
+	try:
+		if not extracted:
+			data_url = ai_service.profile_document_data_url(profile.name, profile.document_id)
+			extracted = ai_service.extract_id_data(data_url)
+			profile.db_set("ai_extraction", json.dumps(extracted))
+		result = ai_service.verify_id_details(_entered_details(profile), extracted)
+	except (frappe.ValidationError, frappe.PermissionError, frappe.DoesNotExistError) as e:
+		# AI down or misbehaving must never fail the wizard save this
+		# runs inside - report it, leave the stored verdict untouched.
+		return {"status": "Error", "confidence": None, "issues": [], "detail": str(e)}
+
+	if result["status"] in ("Match", "Mismatch"):
+		profile.db_set("ai_verification_status", result["status"])
+	profile.db_set("ai_verification_detail", result.get("detail") or "")
+	return result
+
+
+@frappe.whitelist()
 def submit_wizard_step2(national_id: str, document_id: str) -> dict:
 	profile = get_logged_in_profile()
-	profile.national_id = national_id
+	# Huruf + nombor sahaja, uppercase - simbol dibuang sama seperti
+	# input wizard (lihat normalize_national_id; validate() profil
+	# menegakkannya semula atas setiap save, ini untuk kesamarataan
+	# nilai yang dipulangkan/dibandingkan di sini).
+	profile.national_id = normalize_national_id(national_id)
 	profile.document_id = document_id
 	profile.save(ignore_permissions=True)
-	return {"saved": True}
+	return {"saved": True, "verification": _run_ai_verification(profile)}
 
 
 @frappe.whitelist()
@@ -1007,6 +1070,9 @@ def update_settings(**fields) -> dict:
 			if fieldname == "default_currency" and value:
 				if not frappe.db.get_value("Currency", value, "enabled"):
 					frappe.throw(_("Invalid currency."))
+			if fieldname == "full_name" and value:
+				# Sama seperti submit_wizard_step1: nama sentiasa uppercase.
+				value = value.strip().upper()
 			profile.set(fieldname, value)
 
 	try:

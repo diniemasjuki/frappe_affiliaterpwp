@@ -5,20 +5,30 @@
  "creation": "2026-07-21 11:28:46.940566",
  "doctype": "DocType",
  "engine": "InnoDB",
- "field_order": [
-  "referral_code_prefix",
-  "referral_code_name_length",
-  "default_commission_percent",
-  "minimum_cashout",
-  "commission_calculation_section",
-  "commission_base",
-  "commission_on_addons",
-  "column_break_ccalc",
-  "clawback_on_refund",
-  "commission_approval_section",
-  "approve_commission_on_so_status",
-  "approve_commission_on_si_status"
- ],
+  "field_order": [
+   "referral_code_prefix",
+   "referral_code_name_length",
+   "default_commission_percent",
+   "minimum_cashout",
+   "commission_calculation_section",
+   "commission_base",
+   "commission_on_addons",
+   "column_break_ccalc",
+   "clawback_on_refund",
+   "commission_approval_section",
+   "approve_commission_on_so_status",
+   "approve_commission_on_si_status",
+   "ai_integration_section",
+   "ai_provider",
+   "ai_api_key",
+   "column_break_ai",
+   "ai_base_url",
+   "ai_model",
+   "ai_features_section",
+   "enable_id_extraction",
+   "column_break_aifeat",
+   "enable_ai_verification"
+  ],
  "fields": [
   {
    "default": "RC",
@@ -103,13 +113,72 @@
    "label": "Approve Commission When Sales Invoice Status Is",
    "options": "Draft\nSubmitted\nUnpaid\nPartly Paid\nOverdue\nUnpaid and Discounted\nOverdue and Discounted\nPaid",
    "reqd": 1
+  },
+  {
+   "description": "AI service used for ID document OCR (extracting name, IC number, birthdate, gender, address from the uploaded ID) and for verifying the affiliate's entered details against that document. Both providers use the same OpenAI-compatible chat API - only the base URL, model and key differ.",
+   "fieldname": "ai_integration_section",
+   "fieldtype": "Section Break",
+   "label": "AI Integration (ID OCR & Verification)"
+  },
+  {
+   "default": "OpenAI",
+   "fieldname": "ai_provider",
+   "fieldtype": "Select",
+   "label": "AI Provider",
+   "options": "OpenAI\nGLM",
+   "reqd": 1
+  },
+  {
+   "description": "Secret API key for the selected provider (platform.openai.com for OpenAI, z.ai / open.bigmodel.cn for GLM). Stored as a password - it is never sent back to the browser.",
+   "fieldname": "ai_api_key",
+   "fieldtype": "Password",
+   "label": "AI API Key"
+  },
+  {
+   "fieldname": "column_break_ai",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "OpenAI-compatible chat completions endpoint root. Leave blank for the provider default (OpenAI: https://api.openai.com/v1, GLM: https://api.z.ai/api/paas/v4). Only change this for a proxy or a different compatible provider.",
+   "fieldname": "ai_base_url",
+   "fieldtype": "Data",
+   "label": "AI Base URL"
+  },
+  {
+   "description": "Vision-capable chat model. Leave blank for the provider default (OpenAI: gpt-4o-mini, GLM: glm-4v-flash). GLM alternatives: glm-4.5v, glm-4v-plus.",
+   "fieldname": "ai_model",
+   "fieldtype": "Data",
+   "label": "AI Model"
+  },
+  {
+   "fieldname": "ai_features_section",
+   "fieldtype": "Section Break",
+   "label": "AI Features"
+  },
+  {
+   "default": "0",
+   "description": "When the affiliate uploads their ID document in the portal wizard, run AI OCR over it and show the detected details (full name, national ID, birthdate, gender, address) so they can apply them to their profile with one click.",
+   "fieldname": "enable_id_extraction",
+   "fieldtype": "Check",
+   "label": "Extract ID Data with AI (OCR)"
+  },
+  {
+   "fieldname": "column_break_aifeat",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "description": "When the affiliate submits wizard step 2, compare the details they filled in against the uploaded ID document with AI. The verdict (Match / Mismatch and why) is stored on the Affiliate Profile for the approving admin to review. A mismatch warns the affiliate but never blocks the submission - the admin makes the final call.",
+   "fieldname": "enable_ai_verification",
+   "fieldtype": "Check",
+   "label": "Verify Filled Details with AI"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-07-23 12:51:45.329569",
+ "modified": "2026-09-14 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Affiliate",
  "name": "Affiliate Settings",

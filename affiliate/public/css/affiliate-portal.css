@@ -102,6 +102,7 @@ textarea { resize: vertical; min-height: 70px; }
 .ap-code-label { font-size: 10px; color: #9B9B9E; margin: 0 0 4px; text-transform: uppercase; letter-spacing: 0.08em; }
 .ap-code-value { font-size: 19px; font-weight: 700; margin: 0; letter-spacing: 0.03em; color: #fff; }
 .ap-code-pending { font-size: 14px; font-weight: 600; color: #C7C7C9; }
+.ap-code-rate { font-size: 11px; color: #C7C7C9; margin: 8px 0 0; }
 .ap-copy-btn-dark { background: #fff; color: #1A1A1A; border: none; padding: 7px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; }
 
 .ap-cards-row { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin-bottom: 22px; }

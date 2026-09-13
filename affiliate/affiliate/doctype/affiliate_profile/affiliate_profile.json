@@ -22,6 +22,11 @@
   "column_break_hsak",
   "document_id",
   "image_vstv",
+  "ai_id_check_section",
+  "ai_verification_status",
+  "ai_verification_detail",
+  "column_break_aichk",
+  "ai_extraction",
   "referral_and_commission_section",
   "referral_code",
   "last_referral_code_change",
@@ -129,6 +134,37 @@
    "fieldname": "image_vstv",
    "fieldtype": "Image",
    "options": "document_id"
+  },
+  {
+   "description": "Filled automatically by the AI ID features from Affiliate Settings - never typed by hand. The admin approving this profile should treat it as one input among others, not as proof on its own.",
+   "fieldname": "ai_id_check_section",
+   "fieldtype": "Section Break",
+   "label": "AI ID Check"
+  },
+  {
+   "default": "Not Verified",
+   "fieldname": "ai_verification_status",
+   "fieldtype": "Select",
+   "label": "AI ID Verification",
+   "options": "Not Verified\nMatch\nMismatch",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ai_verification_detail",
+   "fieldtype": "Small Text",
+   "label": "AI Verification Notes",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_aichk",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Raw details the AI OCR read off the uploaded ID document (full name, national ID, birthdate, gender, address).",
+   "fieldname": "ai_extraction",
+   "fieldtype": "Long Text",
+   "label": "AI ID Extraction (Raw)",
+   "read_only": 1
   },
   {
    "fieldname": "referral_and_commission_section",
@@ -269,7 +305,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-10 09:30:51.290801",
+ "modified": "2026-09-14 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Affiliate",
  "name": "Affiliate Profile",
