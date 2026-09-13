@@ -37,6 +37,8 @@ Lifecycle (five stages, matching Affiliate Commission's status options):
 import frappe
 from frappe.utils import flt
 
+from affiliate.api.currency_exchange import get_company_currency, get_exchange_rate
+
 # These are hardcoded, not admin-configurable, deliberately: a cancelled
 # or returned sale should never count as earned commission no matter
 # what approval threshold an admin has configured elsewhere.
@@ -178,11 +180,13 @@ def _recompute_amount(commission_name: str, so_name: str):
 		frappe.db.get_value("Affiliate Commission", commission_name, "commission_amount")
 	)
 	if current != flt(amount):
-		frappe.db.set_value(
-			"Affiliate Commission",
-			commission_name,
-			{"commission_amount": amount, "commission_rate": rate, "commission_base": base},
-		)
+		updates = {"commission_amount": amount, "commission_rate": rate, "commission_base": base}
+		so_currency = so.get("currency")
+		if so_currency:
+			# Keep the commission's currency tag in step with the Sales
+			# Order - normally constant, but an admin edit could change it.
+			updates["currency"] = so_currency
+		frappe.db.set_value("Affiliate Commission", commission_name, updates)
 		if affiliate_name:
 			update_affiliate_cached_totals(affiliate_name)
 
@@ -234,6 +238,7 @@ def create_commission_if_eligible(doc, method=None):
 			"affiliate": affiliate_name,
 			"sales_order": doc.name,
 			"booking": doc.get("custom_booking"),
+			"currency": _sale_currency(doc),
 			"commission_amount": amount,
 			"commission_rate": rate,
 			"commission_base": base,
@@ -297,6 +302,16 @@ def sync_from_sales_invoice(doc, method=None):
 	_update_commission_status(commission_name, new_status)
 
 
+def _sale_currency(sales_order_doc) -> str:
+	"""The transaction currency of a Sales Order - which under
+	travel_booking's multi-company model is always the issuing company's
+	own currency (conversion_rate=1). Falls back to the site's company
+	currency for SOs missing a currency value (shouldn't happen, but a
+	commission must never carry a blank currency tag).
+	"""
+	return sales_order_doc.get("currency") or get_company_currency()
+
+
 def _upsert_commission_invoice_row(commission_name: str, sales_invoice_doc):
 	"""Adds this Sales Invoice to the commission's sales_invoices child
 	table if it isn't already there, or refreshes its recorded
@@ -316,11 +331,14 @@ def _upsert_commission_invoice_row(commission_name: str, sales_invoice_doc):
 	if existing_row:
 		existing_row.invoice_amount = sales_invoice_doc.grand_total
 		existing_row.invoice_status = sales_invoice_doc.status
+		if sales_invoice_doc.currency:
+			existing_row.currency = sales_invoice_doc.currency
 	else:
 		commission.append(
 			"sales_invoices",
 			{
 				"sales_invoice": sales_invoice_doc.name,
+				"currency": sales_invoice_doc.currency,
 				"invoice_amount": sales_invoice_doc.grand_total,
 				"invoice_status": sales_invoice_doc.status,
 			},
@@ -497,6 +515,7 @@ def _maybe_create_reversal(commission_name: str):
 			"affiliate",
 			"sales_order",
 			"booking",
+			"currency",
 			"commission_amount",
 			"commission_rate",
 			"commission_base",
@@ -512,6 +531,7 @@ def _maybe_create_reversal(commission_name: str):
 			"affiliate": original.affiliate,
 			"sales_order": original.sales_order,
 			"booking": original.booking,
+			"currency": original.currency,
 			"commission_amount": -flt(original.commission_amount),
 			"commission_rate": original.commission_rate,
 			"commission_base": original.commission_base,
@@ -525,53 +545,163 @@ def _maybe_create_reversal(commission_name: str):
 
 
 def update_affiliate_cached_totals(affiliate_name: str):
-	"""Recalculates and stores total_sales/total_commission/available_balance
-	on the given Affiliate Profile. Only Approved and Paid commissions count
-	towards these totals - Pending (not yet earned) and Denied (rejected)
-	are excluded, so the figures only reflect commission the affiliate is
-	actually entitled to.
+	"""Recalculates and stores the balance figures on the given Affiliate
+	Profile. Only Approved and Paid commissions count towards these
+	totals - Pending (not yet earned) and Denied (rejected) are excluded,
+	so the figures only reflect commission the affiliate is actually
+	entitled to.
+
+	Currency model (multi-company travel_booking): every commission lives
+	in its Sales Order's transaction currency, so all totals are kept
+	EXACTLY per currency in the "Balances by Currency" child table. The
+	scalar total_sales/total_commission/available_balance fields hold
+	approximations converted into the site's company currency (uniform
+	across affiliates - the leaderboard ranks on these), and the
+	*_est fields hold approximations in the affiliate's own preferred
+	display currency. Conversions are display-only; if any Currency
+	Exchange rate is missing, the approximation is stored as 0
+	(Currency columns are NOT NULL in Frappe) - the portal ignores
+	these cached fields and recomputes estimates live from the exact
+	per-currency balances, hiding the figure entirely when no rate
+	exists.
 	"""
 	rows = frappe.get_all(
 		"Affiliate Commission",
 		filters={"affiliate": affiliate_name, "status": ["in", ["Approved", "Paid"]]},
-		fields=["sales_order", "commission_amount", "is_reversal"],
+		fields=["sales_order", "commission_amount", "is_reversal", "currency"],
 	)
 
-	# Reversal rows carry a negative commission_amount, so they reduce
-	# total_commission naturally here.
-	total_commission = sum(r.commission_amount or 0 for r in rows)
+	company_currency = get_company_currency()
 
-	total_sales = 0
+	# Reversal rows carry a negative commission_amount, so they reduce
+	# their currency bucket's total_commission naturally here.
+	buckets = {}
+
+	def _bucket(currency: str) -> dict:
+		key = currency or company_currency
+		return buckets.setdefault(
+			key, {"sales": 0.0, "commission": 0.0, "paid_out": 0.0}
+		)
+
+	so_info = {}
+	so_names = [r.sales_order for r in rows if r.sales_order]
+	if so_names:
+		so_info = {
+			so.name: so
+			for so in frappe.get_all(
+				"Sales Order",
+				filters={"name": ["in", so_names]},
+				fields=["name", "grand_total", "currency"],
+			)
+		}
+
 	for r in rows:
-		if not r.sales_order:
+		bucket = _bucket(r.currency)
+		bucket["commission"] += r.commission_amount or 0
+
+		so = so_info.get(r.sales_order)
+		if not so:
 			continue
-		grand_total = frappe.db.get_value("Sales Order", r.sales_order, "grand_total") or 0
 		# A reversal claws back a sale already counted by its original
 		# (Paid) commission's row, so subtract the same grand_total back
-		# rather than adding it a second time.
+		# rather than adding it a second time. Sales are bucketed by the
+		# SO's own transaction currency (normally the commission's).
+		sales_bucket = _bucket(so.currency or r.currency)
+		grand_total = so.grand_total or 0
 		if r.is_reversal:
-			total_sales -= grand_total
+			sales_bucket["sales"] -= grand_total
 		else:
-			total_sales += grand_total
+			sales_bucket["sales"] += grand_total
 
-	paid_out = frappe.db.sql(
-		"""SELECT COALESCE(SUM(amount), 0)
+	for p in frappe.db.sql(
+		"""SELECT currency, COALESCE(SUM(amount), 0) AS amount
 		   FROM `tabAffiliate Payout`
-		   WHERE affiliate = %s AND status = 'Paid'""",
+		   WHERE affiliate = %s AND status = 'Paid'
+		   GROUP BY currency""",
 		(affiliate_name,),
-	)[0][0]
+		as_dict=True,
+	):
+		_bucket(p.currency or company_currency)["paid_out"] += p.amount
 
-	available_balance = total_commission - paid_out
+	default_currency = (
+		frappe.db.get_value("Affiliate Profile", affiliate_name, "default_currency")
+		or company_currency
+	)
+
+	balance_rows = []
+	est = {"sales": 0.0, "commission": 0.0, "balance": 0.0}
+	company_totals = {"sales": 0.0, "commission": 0.0, "balance": 0.0}
+	est_complete = True
+	company_complete = True
+
+	# When the affiliate's display currency IS the company currency, one
+	# pass fills both approximations (running the conversion twice would
+	# double every figure).
+	targets = [(default_currency, est)]
+	if company_currency != default_currency:
+		targets.append((company_currency, company_totals))
+
+	for currency in sorted(buckets):
+		b = buckets[currency]
+		available = b["commission"] - b["paid_out"]
+		balance_rows.append(
+			{
+				"currency": currency,
+				"total_sales": b["sales"],
+				"total_commission": b["commission"],
+				"available_balance": available,
+			}
+		)
+
+		for target, key in targets:
+			rate = 1.0 if currency == target else get_exchange_rate(currency, target)
+			if rate is None:
+				# One missing rate hides the WHOLE approximation - a
+				# partially-converted total would be a wrong number
+				# presented as an estimate.
+				if target == default_currency:
+					est_complete = False
+				else:
+					company_complete = False
+				continue
+			key["sales"] += b["sales"] * rate
+			key["commission"] += b["commission"] * rate
+			key["balance"] += available * rate
+
+	if company_currency == default_currency:
+		company_totals, company_complete = est, est_complete
 
 	frappe.db.set_value(
 		"Affiliate Profile",
 		affiliate_name,
 		{
-			"total_sales": total_sales,
-			"total_commission": total_commission,
-			"available_balance": available_balance,
+			"total_sales": flt(company_totals["sales"], 2) if company_complete else 0,
+			"total_commission": flt(company_totals["commission"], 2) if company_complete else 0,
+			"available_balance": flt(company_totals["balance"], 2) if company_complete else 0,
+			"total_sales_est": flt(est["sales"], 2) if est_complete else 0,
+			"total_commission_est": flt(est["commission"], 2) if est_complete else 0,
+			"available_balance_est": flt(est["balance"], 2) if est_complete else 0,
 		},
 	)
+
+	# Rewrite the child table at the DB level instead of saving the
+	# profile doc - a full save would fire on_update() (Sales Partner
+	# sync etc.) on every commission status change, for no benefit.
+	frappe.db.delete(
+		"Affiliate Currency Balance",
+		{"parent": affiliate_name, "parenttype": "Affiliate Profile", "parentfield": "balances"},
+	)
+	for idx, row in enumerate(balance_rows):
+		frappe.get_doc(
+			{
+				"doctype": "Affiliate Currency Balance",
+				"parent": affiliate_name,
+				"parenttype": "Affiliate Profile",
+				"parentfield": "balances",
+				"idx": idx + 1,
+				**row,
+			}
+		).db_insert()
 
 
 def generate_unique_bill_no() -> str:
@@ -612,25 +742,13 @@ def generate_unique_bill_no() -> str:
 	return f"{prefix}{last_seq + 1:04d}"
 
 
-def get_unpaid_out_commissions(affiliate: str) -> list:
+def _eligible_commissions(affiliate: str) -> list:
 	"""Approved commissions for this affiliate that haven't been
 	attached to any Affiliate Payout yet (via the Affiliate Payout
-	Commission child table).
+	Commission child table). Shared core of get_unpaid_out_commissions
+	and get_unpaid_out_commissions_by_currency.
 
-	This is the SINGLE SOURCE OF TRUTH for what "eligible for payout"
-	means - both the affiliate-initiated self-request flow
-	(portal_api.request_payout) and the admin/scheduled batch flow
-	(payout_batch.generate_payout_batch) call this same function.
-	Previously they each had their own logic for this: the portal only
-	counted commissions not already in a Payout, while the batch job
-	counted ALL Approved commissions regardless of Payout membership.
-	That mismatch meant an affiliate who self-requested a payout could
-	have the *same* commissions swept into a second payout by the next
-	admin batch run - a real double-payment risk. Having one function
-	that both call means there's exactly one definition of "already
-	spoken for" and it can't drift out of sync between the two flows.
-
-	Pending commissions aren't included here because they haven't been
+	Pending commissions aren't included because they haven't been
 	approved yet, and commissions already sitting in a Payout
 	(Pending/Processing/Paid) are excluded so the same money can't be
 	requested or batched twice.
@@ -638,7 +756,7 @@ def get_unpaid_out_commissions(affiliate: str) -> list:
 	approved = frappe.get_all(
 		"Affiliate Commission",
 		filters={"affiliate": affiliate, "status": "Approved", "is_reversal": 0},
-		fields=["name", "commission_amount"],
+		fields=["name", "commission_amount", "currency"],
 	)
 	if not approved:
 		return []
@@ -652,3 +770,27 @@ def get_unpaid_out_commissions(affiliate: str) -> list:
 	)
 
 	return [c for c in approved if c.name not in already_in_payout]
+
+
+def get_unpaid_out_commissions(affiliate: str) -> list:
+	"""Flat list of payout-eligible commissions (see _eligible_commissions
+	for the eligibility rule). Callers that create payouts must use
+	get_unpaid_out_commissions_by_currency instead - a payout can only
+	ever combine commissions of a single currency.
+	"""
+	return _eligible_commissions(affiliate)
+
+
+def get_unpaid_out_commissions_by_currency(affiliate: str) -> dict[str, list]:
+	"""Payout-eligible commissions grouped by their currency. Under the
+	multi-company model an affiliate can hold Approved commissions in
+	several currencies at once (e.g. MYR and SGD); amounts across groups
+	must never be summed or paid out together - each group is a separate
+	payout in its own currency. Blank commission currency (legacy rows
+	before the backfill patch) is bucketed under the site's company
+	currency.
+	"""
+	grouped: dict[str, list] = {}
+	for c in _eligible_commissions(affiliate):
+		grouped.setdefault(c.currency or get_company_currency(), []).append(c)
+	return grouped

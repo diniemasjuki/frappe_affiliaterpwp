@@ -15,6 +15,7 @@ class AffiliateCommissionInvoice(Document):
 
 		invoice_amount: DF.Currency
 		invoice_status: DF.Literal["Draft", "Submitted", "Unpaid", "Partly Paid", "Overdue", "Unpaid and Discounted", "Overdue and Discounted", "Paid", "Cancelled", "Return", "Credit Note Issued"]
+		currency: DF.Link | None
 		parent: DF.Data
 		parentfield: DF.Data
 		parenttype: DF.Data

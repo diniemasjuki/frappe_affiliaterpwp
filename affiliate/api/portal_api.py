@@ -3,7 +3,51 @@ import re
 import frappe
 from frappe import _
 
-from affiliate.api.commission_sync import get_unpaid_out_commissions, generate_unique_bill_no
+from affiliate.api.commission_sync import (
+	generate_unique_bill_no,
+	get_unpaid_out_commissions_by_currency,
+	update_affiliate_cached_totals,
+)
+from affiliate.api.currency_exchange import (
+	currency_symbol,
+	get_company_currency,
+	get_exchange_rate,
+)
+
+
+def _currency_symbols(currencies: list) -> dict:
+	"""Symbol map for every currency an API response mentions, so the
+	portal can prefix amounts with the right symbol instead of a
+	hardcoded "RM".
+	"""
+	out = {}
+	for currency in currencies:
+		if currency and currency not in out:
+			out[currency] = currency_symbol(currency)
+	return out
+
+
+def _default_display_currency(profile) -> str:
+	"""The affiliate's chosen display currency, falling back to the
+	site's company currency when they haven't picked one.
+	"""
+	return profile.default_currency or get_company_currency()
+
+
+def _estimate(by_currency: dict, target: str):
+	"""Approximate total of {currency: amount} converted into `target`
+	using display-only exchange rates. Returns None when ANY component
+	rate is missing - a partially-converted number presented as an
+	estimate would be a wrong number, so the whole estimate is hidden
+	instead.
+	"""
+	total = 0.0
+	for currency, amount in by_currency.items():
+		rate = 1.0 if currency == target else get_exchange_rate(currency, target)
+		if rate is None:
+			return None
+		total += amount * rate
+	return frappe.utils.flt(total, 2)
 
 
 @frappe.whitelist(allow_guest=True)
@@ -145,6 +189,11 @@ def get_dashboard_data() -> dict:
 	"""Single call returning everything the portal needs to render the
 	dashboard: profile summary fields, whether the wizard is still
 	incomplete, and the commission/payout tables.
+
+	Currency-sensitive: every amount is returned together with its own
+	currency (exact per-sale figures), plus the per-currency balances
+	child table and the affiliate's preferred-display-currency
+	estimates (approx.) for the summary cards.
 	"""
 	profile = get_logged_in_profile(auto_create=True)
 
@@ -153,19 +202,53 @@ def get_dashboard_data() -> dict:
 	commissions = frappe.get_all(
 		"Affiliate Commission",
 		filters={"affiliate": profile.name},
-		fields=["name", "sales_order", "sales_invoice", "commission_amount", "status", "creation", "is_reversal"],
+		fields=["name", "sales_order", "sales_invoice", "currency", "commission_amount", "status", "creation", "is_reversal"],
 		order_by="creation desc",
 	)
 
+	so_info = {}
+	so_names = [c.sales_order for c in commissions if c.sales_order]
+	if so_names:
+		so_info = {
+			so.name: so
+			for so in frappe.get_all(
+				"Sales Order",
+				filters={"name": ["in", so_names]},
+				fields=["name", "grand_total", "currency"],
+			)
+		}
 	for c in commissions:
-		c["sales_order_amount"] = frappe.db.get_value("Sales Order", c.sales_order, "grand_total") or 0
+		so = so_info.get(c.sales_order)
+		c["sales_order_amount"] = (so.grand_total or 0) if so else 0
+		c["sales_order_currency"] = ((so.currency if so else None) or c.currency)
 
 	payouts = frappe.get_all(
 		"Affiliate Payout",
 		filters={"affiliate": profile.name},
-		fields=["name", "bill_no", "generated_date", "period_start", "period_end", "amount", "status", "payment_method"],
+		fields=["name", "bill_no", "generated_date", "period_start", "period_end", "currency", "amount", "status", "payment_method"],
 		order_by="generated_date desc",
 	)
+
+	default_currency = _default_display_currency(profile)
+	company_currency = get_company_currency()
+	balances = [
+		{
+			"currency": b.currency,
+			"total_sales": b.total_sales,
+			"total_commission": b.total_commission,
+			"available_balance": b.available_balance,
+		}
+		for b in profile.balances
+	]
+
+	def _live_estimate(key):
+		"""Approximate display-currency total recomputed from the exact
+		per-currency balances at read time - the cached *_est fields on
+		the profile go stale the moment exchange rates move, and this
+		also lets us cleanly HIDE the estimate (None) when any rate is
+		missing instead of showing a stored zero.
+		"""
+		return _estimate({b["currency"]: b[key] for b in balances}, default_currency)
 
 	return {
 		"profile": {
@@ -183,12 +266,32 @@ def get_dashboard_data() -> dict:
 			"bank_name": profile.bank_name,
 			"account_name": profile.account_name,
 			"account_number": profile.account_number,
+			"default_currency": profile.default_currency,
 		},
 		"wizard_complete": wizard_complete,
 		"newly_registered": bool(profile.flags.newly_created),
+		"company_currency": company_currency,
+		"default_currency": default_currency,
+		"currency_symbols": _currency_symbols(
+			[b["currency"] for b in balances]
+			+ [c.get("currency") for c in commissions]
+			+ [c.get("sales_order_currency") for c in commissions]
+			+ [p.get("currency") for p in payouts]
+			+ [default_currency, company_currency]
+		),
+		# Exact per-currency totals (the single source of truth); scalar
+		# totals below are company-currency approximations kept for
+		# backward compatibility with older portal builds.
+		"balances": balances,
 		"total_sales": profile.total_sales,
 		"total_commission": profile.total_commission,
 		"available_balance": profile.available_balance,
+		"total_sales_est": _live_estimate("total_sales"),
+		"total_commission_est": _live_estimate("total_commission"),
+		"available_balance_est": _live_estimate("available_balance"),
+		"available_currencies": sorted(
+			frappe.get_all("Currency", filters={"enabled": 1}, pluck="name")
+		),
 		"commissions": commissions,
 		"payouts": payouts,
 	}
@@ -235,10 +338,17 @@ def get_leaderboard() -> dict:
 			+ 1
 		)
 
+	# total_sales is stored uniformly in the site's company currency
+	# (approx., converted for comparability) - tell the portal which
+	# currency that is so it formats amounts correctly.
+	company_currency = get_company_currency()
+
 	return {
 		"leaderboard": leaderboard,
 		"your_rank": your_rank,
 		"your_total_sales": profile.total_sales,
+		"currency": company_currency,
+		"symbol": currency_symbol(company_currency),
 	}
 
 
@@ -249,25 +359,61 @@ def get_commission_status() -> dict:
 	affiliate's bank account yet) vs paid. Denied commissions are
 	excluded entirely - they were never valid earnings, so counting
 	them here would be misleading either way.
+
+	Currency-sensitive: amounts are bucketed per commission currency
+	(exact figures), with an approximate combined estimate in the
+	affiliate's preferred display currency. The estimate is None when
+	any exchange rate is missing - the portal hides it rather than
+	showing a partially-converted number.
 	"""
 	profile = get_logged_in_profile()
 
-	unpaid = frappe.get_all(
+	rows = frappe.get_all(
 		"Affiliate Commission",
-		filters={"affiliate": profile.name, "status": ["in", ["Pending", "Invoiced", "Approved"]]},
-		fields=["commission_amount"],
-	)
-	paid = frappe.get_all(
-		"Affiliate Commission",
-		filters={"affiliate": profile.name, "status": "Paid", "is_reversal": 0},
-		fields=["commission_amount"],
+		filters={
+			"affiliate": profile.name,
+			"status": ["in", ["Pending", "Invoiced", "Approved", "Paid"]],
+		},
+		fields=["currency", "commission_amount", "status", "is_reversal"],
 	)
 
+	company_currency = get_company_currency()
+	default_currency = _default_display_currency(profile)
+
+	unpaid_amounts = {}
+	unpaid_counts = {}
+	paid_amounts = {}
+	paid_counts = {}
+	for r in rows:
+		currency = r.currency or company_currency
+		if r.status == "Paid":
+			if not r.is_reversal:
+				paid_amounts[currency] = paid_amounts.get(currency, 0.0) + (r.commission_amount or 0)
+				paid_counts[currency] = paid_counts.get(currency, 0) + 1
+		else:
+			unpaid_amounts[currency] = unpaid_amounts.get(currency, 0.0) + (r.commission_amount or 0)
+			unpaid_counts[currency] = unpaid_counts.get(currency, 0) + 1
+
+	per_currency = [
+		{
+			"currency": currency,
+			"symbol": currency_symbol(currency),
+			"unpaid_amount": unpaid_amounts.get(currency, 0.0),
+			"unpaid_count": unpaid_counts.get(currency, 0),
+			"paid_amount": paid_amounts.get(currency, 0.0),
+			"paid_count": paid_counts.get(currency, 0),
+		}
+		for currency in sorted(set(unpaid_amounts) | set(paid_amounts))
+	]
+
 	return {
-		"unpaid_amount": sum(row.commission_amount for row in unpaid),
-		"unpaid_count": len(unpaid),
-		"paid_amount": sum(row.commission_amount for row in paid),
-		"paid_count": len(paid),
+		"default_currency": default_currency,
+		"currency_symbols": _currency_symbols(
+			list(unpaid_amounts) + list(paid_amounts) + [default_currency]
+		),
+		"per_currency": per_currency,
+		"unpaid_amount_est": _estimate(unpaid_amounts, default_currency),
+		"paid_amount_est": _estimate(paid_amounts, default_currency),
 	}
 
 
@@ -302,17 +448,44 @@ def get_performance(period: str = "week") -> dict:
 	commissions = frappe.get_all(
 		"Affiliate Commission",
 		filters=filters,
-		fields=["sales_order", "commission_amount", "status"],
+		fields=["sales_order", "commission_amount", "currency", "status"],
 	)
 
+	company_currency = get_company_currency()
+	default_currency = _default_display_currency(profile)
+
 	def _summarize(rows):
-		total_sales = 0
+		sales_by_currency = {}
+		commission_by_currency = {}
 		for c in rows:
-			total_sales += frappe.db.get_value("Sales Order", c.sales_order, "grand_total") or 0
+			currency = c.currency or company_currency
+			commission_by_currency[currency] = (
+				commission_by_currency.get(currency, 0.0) + (c.commission_amount or 0)
+			)
+			if c.sales_order:
+				grand_total, so_currency = frappe.db.get_value(
+					"Sales Order", c.sales_order, ["grand_total", "currency"]
+				) or (0, None)
+				sales_currency = so_currency or currency
+				sales_by_currency[sales_currency] = (
+					sales_by_currency.get(sales_currency, 0.0) + (grand_total or 0)
+				)
+
 		return {
 			"orders": len(rows),
-			"total_sales": total_sales,
-			"total_commission": sum(row.commission_amount for row in rows),
+			"per_currency": [
+				{
+					"currency": currency,
+					"symbol": currency_symbol(currency),
+					"total_sales": sales_by_currency.get(currency, 0.0),
+					"total_commission": commission_by_currency.get(currency, 0.0),
+				}
+				for currency in sorted(set(sales_by_currency) | set(commission_by_currency))
+			],
+			"total_sales_est": _estimate(sales_by_currency, default_currency),
+			"total_commission_est": _estimate(commission_by_currency, default_currency),
+			"estimate_currency": default_currency,
+			"estimate_symbol": currency_symbol(default_currency),
 		}
 
 	confirmed_rows = [c for c in commissions if c.status in ("Approved", "Paid")]
@@ -344,12 +517,25 @@ def get_referrals(filter: str = "all") -> dict:
 	commissions = frappe.get_all(
 		"Affiliate Commission",
 		filters=filters,
-		fields=["name", "sales_order", "sales_invoice", "commission_amount", "status", "creation"],
+		fields=["name", "sales_order", "sales_invoice", "currency", "commission_amount", "status", "creation"],
 		order_by="creation desc",
 	)
 
+	so_info = {}
+	so_names = [c.sales_order for c in commissions if c.sales_order]
+	if so_names:
+		so_info = {
+			so.name: so
+			for so in frappe.get_all(
+				"Sales Order",
+				filters={"name": ["in", so_names]},
+				fields=["name", "grand_total", "currency"],
+			)
+		}
 	for c in commissions:
-		c["sales_order_amount"] = frappe.db.get_value("Sales Order", c.sales_order, "grand_total") or 0
+		so = so_info.get(c.sales_order)
+		c["sales_order_amount"] = (so.grand_total or 0) if so else 0
+		c["sales_order_currency"] = ((so.currency if so else None) or c.currency)
 
 	return {"referrals": commissions}
 
@@ -357,49 +543,103 @@ def get_referrals(filter: str = "all") -> dict:
 @frappe.whitelist()
 def get_payouts_summary() -> dict:
 	"""Payout history plus the summary figures the "Payouts" page needs:
-	total already paid out, total still pending/processing, the
-	minimum cashout threshold from Affiliate Settings, the affiliate's
-	current available balance (computed live from unpaid-out Approved
-	commissions, not the static profile field), and whether they're
-	currently allowed to request a new payout.
+	what's already paid out and still pending/processing (per payout
+	currency - a payout can only ever hold ONE currency), the minimum
+	cashout threshold from Affiliate Settings, the affiliate's current
+	available balance per currency (computed live from unpaid-out
+	Approved commissions, not the static profile fields), an approximate
+	combined estimate in their preferred display currency, and whether
+	they're currently allowed to request a new payout.
 	"""
 	profile = get_logged_in_profile()
 
 	payouts = frappe.get_all(
 		"Affiliate Payout",
 		filters={"affiliate": profile.name},
-		fields=["name", "bill_no", "generated_date", "period_start", "period_end", "amount", "status", "payment_method"],
+		fields=["name", "bill_no", "generated_date", "period_start", "period_end", "currency", "amount", "status", "payment_method"],
 		order_by="generated_date desc",
 	)
 
-	paid_out = sum(p.amount for p in payouts if p.status == "Paid")
-	pending_payout = sum(p.amount for p in payouts if p.status in ("Pending", "Processing"))
-	has_open_payout = any(p.status in ("Pending", "Processing") for p in payouts)
+	company_currency = get_company_currency()
+	default_currency = _default_display_currency(profile)
 
-	eligible = get_unpaid_out_commissions(profile.name)
-	available_balance = sum(c.commission_amount for c in eligible)
+	paid_by_currency = {}
+	pending_by_currency = {}
+	has_open_payout = False
+	for p in payouts:
+		currency = p.currency or company_currency
+		if p.status == "Paid":
+			paid_by_currency[currency] = paid_by_currency.get(currency, 0.0) + (p.amount or 0)
+		elif p.status in ("Pending", "Processing"):
+			has_open_payout = True
+			pending_by_currency[currency] = pending_by_currency.get(currency, 0.0) + (p.amount or 0)
 
 	minimum_cashout = frappe.get_cached_value("Affiliate Settings", None, "minimum_cashout") or 0
 
+	grouped = get_unpaid_out_commissions_by_currency(profile.name)
+	available_by_currency = []
+	cashable_currencies = []
+	for currency in sorted(grouped):
+		amount = sum(c.commission_amount for c in grouped[currency])
+		meets_minimum = amount >= minimum_cashout and amount > 0
+		if meets_minimum:
+			cashable_currencies.append(currency)
+		available_by_currency.append(
+			{
+				"currency": currency,
+				"symbol": currency_symbol(currency),
+				"amount": amount,
+				"meets_minimum": meets_minimum,
+			}
+		)
+
 	return {
 		"payouts": payouts,
-		"total_paid_out": paid_out,
-		"pending_payout": pending_payout,
 		"minimum_cashout": minimum_cashout,
-		"available_balance": available_balance,
+		"default_currency": default_currency,
+		"company_currency": company_currency,
+		"currency_symbols": _currency_symbols(
+			list(paid_by_currency)
+			+ list(pending_by_currency)
+			+ [row["currency"] for row in available_by_currency]
+			+ [default_currency, company_currency]
+		),
+		"available_by_currency": available_by_currency,
+		"available_balance_est": _estimate(
+			{row["currency"]: row["amount"] for row in available_by_currency},
+			default_currency,
+		),
+		"total_paid_out_by_currency": [
+			{"currency": currency, "symbol": currency_symbol(currency), "amount": amount}
+			for currency, amount in sorted(paid_by_currency.items())
+		],
+		"total_paid_out_est": _estimate(paid_by_currency, default_currency),
+		"pending_payout_by_currency": [
+			{"currency": currency, "symbol": currency_symbol(currency), "amount": amount}
+			for currency, amount in sorted(pending_by_currency.items())
+		],
+		"pending_payout_est": _estimate(pending_by_currency, default_currency),
+		"cashable_currencies": cashable_currencies,
 		"has_open_payout": has_open_payout,
-		"can_request_payout": (not has_open_payout) and available_balance >= minimum_cashout and available_balance > 0,
+		"can_request_payout": (not has_open_payout) and bool(cashable_currencies),
 	}
 
 
 
 
 @frappe.whitelist()
-def request_payout() -> dict:
-	"""Lets an affiliate self-serve request a payout of everything
-	currently eligible (Approved commissions not yet in any payout),
-	provided they meet the minimum cashout threshold and don't already
-	have an open (Pending/Processing) payout in flight.
+def request_payout(currency: str = "") -> dict:
+	"""Lets an affiliate self-serve request a payout of the currently
+	eligible Approved commissions IN ONE CURRENCY, provided that
+	currency's balance meets the minimum cashout threshold and they
+	don't already have an open (Pending/Processing) payout in flight.
+
+	Payouts are strictly single-currency: an affiliate holding Approved
+	commissions in MYR and SGD gets one payout per currency, never one
+	mixed-currency amount. `currency` is optional - when omitted and
+	exactly one currency is cashable, that currency is used; anything
+	ambiguous is rejected with a per-currency balance breakdown rather
+	than guessed.
 
 	Creates the Affiliate Payout as "Pending" - an admin still handles
 	the actual bank transfer and moves it through Processing -> Paid
@@ -422,20 +662,54 @@ def request_payout() -> dict:
 	if existing_open:
 		frappe.throw(_("You already have a payout in progress. Please wait for it to complete before requesting another."))
 
-	eligible = get_unpaid_out_commissions(profile.name)
-	available_balance = sum(c.commission_amount for c in eligible)
+	grouped = get_unpaid_out_commissions_by_currency(profile.name)
+	if not grouped:
+		frappe.throw(_("You don't have any approved commissions available to cash out yet."))
+
+	def _balance(cur):
+		return sum(c.commission_amount for c in grouped[cur])
 
 	minimum_cashout = frappe.get_cached_value("Affiliate Settings", None, "minimum_cashout") or 0
+	currency = (currency or "").strip()
+
+	if currency:
+		if currency not in grouped:
+			frappe.throw(_("You don't have any approved {0} commissions available to cash out.").format(currency))
+	else:
+		cashable = [cur for cur in sorted(grouped) if _balance(cur) >= minimum_cashout and _balance(cur) > 0]
+		if len(cashable) == 1:
+			currency = cashable[0]
+		elif not cashable:
+			balances_text = ", ".join(
+				frappe.utils.fmt_money(_balance(cur), currency=cur) for cur in sorted(grouped)
+			)
+			frappe.throw(
+				_("Your available balances don't reach the minimum cashout ({0}) in any single currency. Available: {1}.").format(
+					minimum_cashout,
+					balances_text,
+				)
+			)
+		else:
+			balances_text = ", ".join(
+				frappe.utils.fmt_money(_balance(cur), currency=cur) for cur in sorted(grouped)
+			)
+			frappe.throw(
+				_("You have approved commissions in several currencies ({0}). Payouts are made one currency at a time - please choose which currency to cash out.").format(
+					balances_text
+				)
+			)
+
+	commissions = grouped[currency]
+	available_balance = _balance(currency)
+
 	if available_balance < minimum_cashout:
 		frappe.throw(
-			_("You need at least {0} to request a payout. Your current available balance is {1}.").format(
-				frappe.utils.fmt_money(minimum_cashout, currency="MYR"),
-				frappe.utils.fmt_money(available_balance, currency="MYR"),
+			_("You need at least {0} to request a payout. Your current {1} balance is {2}.").format(
+				frappe.utils.fmt_money(minimum_cashout, currency=currency),
+				currency,
+				frappe.utils.fmt_money(available_balance, currency=currency),
 			)
 		)
-
-	if not eligible:
-		frappe.throw(_("You don't have any approved commissions available to cash out yet."))
 
 	today = frappe.utils.nowdate()
 	payout = frappe.get_doc({
@@ -447,12 +721,13 @@ def request_payout() -> dict:
 		"payment_method": "Bank Transfer",
 		"period_start": frappe.utils.add_months(today, -1),
 		"period_end": today,
+		"currency": currency,
 		"amount": available_balance,
-		"commissions": [{"commission": c.name} for c in eligible],
+		"commissions": [{"commission": c.name} for c in commissions],
 	})
 	payout.insert(ignore_permissions=True)
 
-	return {"requested": True, "payout": payout.name, "amount": available_balance}
+	return {"requested": True, "payout": payout.name, "amount": available_balance, "currency": currency}
 
 
 @frappe.whitelist()
@@ -707,6 +982,9 @@ def set_custom_referral_code(referral_code: str) -> dict:
 def update_settings(**fields) -> dict:
 	"""Used after the wizard is complete, from the Settings tab, to edit
 	any profile field the affiliate is allowed to change themselves.
+	Includes default_currency (their preferred display currency) -
+	changing it re-computes the cached per-currency totals and display-
+	currency estimates.
 	"""
 	profile = get_logged_in_profile()
 
@@ -719,10 +997,16 @@ def update_settings(**fields) -> dict:
 		"bank_name",
 		"account_name",
 		"account_number",
+		"default_currency",
 	}
+
+	previous_default_currency = profile.default_currency
 
 	for fieldname, value in fields.items():
 		if fieldname in editable_fields:
+			if fieldname == "default_currency" and value:
+				if not frappe.db.get_value("Currency", value, "enabled"):
+					frappe.throw(_("Invalid currency."))
 			profile.set(fieldname, value)
 
 	try:
@@ -731,4 +1015,10 @@ def update_settings(**fields) -> dict:
 		if _is_phone_validation_error(e):
 			frappe.throw(_("Please enter a valid phone number, including the country code."))
 		raise
+
+	if profile.default_currency != previous_default_currency:
+		# The *_est fields are expressed in the display currency, so a
+		# change of display currency invalidates them.
+		update_affiliate_cached_totals(profile.name)
+
 	return {"saved": True}

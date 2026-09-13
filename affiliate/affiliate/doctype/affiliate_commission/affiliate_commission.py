@@ -20,6 +20,7 @@ class AffiliateCommission(Document):
 		commission_amount: DF.Currency
 		commission_base: DF.Literal["Gross", "Nett"]
 		commission_rate: DF.Float
+		currency: DF.Link | None
 		is_reversal: DF.Check
 		reverses: DF.Link | None
 		sales_invoice: DF.Link | None

@@ -19,6 +19,7 @@ class AffiliatePayout(Document):
 		amount: DF.Currency
 		bill_no: DF.Data
 		commissions: DF.Table[AffiliatePayoutCommission]
+		currency: DF.Link | None
 		generated_date: DF.Date | None
 		payment_method: DF.Data | None
 		period_end: DF.Date | None

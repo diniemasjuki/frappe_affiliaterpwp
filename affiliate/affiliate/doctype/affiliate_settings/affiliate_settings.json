@@ -45,6 +45,7 @@
    "label": "Default Commission Percent"
   },
   {
+   "description": "Minimum available balance before an affiliate can request a payout. Applied per payout currency: each currency's own balance must reach this threshold, since a payout can only ever combine commissions of a single currency.",
    "fieldname": "minimum_cashout",
    "fieldtype": "Currency",
    "label": "Minimum Cashout"

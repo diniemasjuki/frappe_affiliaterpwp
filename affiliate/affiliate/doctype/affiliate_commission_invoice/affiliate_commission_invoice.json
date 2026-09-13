@@ -8,6 +8,7 @@
  "engine": "InnoDB",
  "field_order": [
   "sales_invoice",
+  "currency",
   "invoice_amount",
   "invoice_status"
  ],
@@ -20,10 +21,19 @@
    "options": "Sales Invoice"
   },
   {
+   "fieldname": "currency",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Currency",
+   "options": "Currency",
+   "read_only": 1
+  },
+  {
    "fieldname": "invoice_amount",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "Invoice Amount"
+   "label": "Invoice Amount",
+   "options": "currency"
   },
   {
    "fieldname": "invoice_status",

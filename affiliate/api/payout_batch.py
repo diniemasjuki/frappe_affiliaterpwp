@@ -2,12 +2,16 @@ import frappe
 from frappe import _
 from frappe.utils import today
 
-from affiliate.api.commission_sync import get_unpaid_out_commissions, generate_unique_bill_no
+from affiliate.api.commission_sync import generate_unique_bill_no, get_unpaid_out_commissions_by_currency
+from affiliate.api.currency_exchange import get_company_currency
 
 
 def generate_payout_batch(period_start: str | None = None, period_end: str | None = None):
 	"""Groups all unpaid-out Approved commissions (across all eligible
-	affiliates) into one Payout per affiliate. Safe to run repeatedly -
+	affiliates) into Payouts - one per affiliate PER CURRENCY, since a
+	payout can only ever combine commissions of a single currency (an
+	affiliate with Approved commissions in both MYR and SGD gets two
+	payouts, not one mixed-currency number). Safe to run repeatedly -
 	an affiliate with no eligible commissions, or below the minimum
 	cashout threshold, simply gets no payout this run. Also safe to run
 	alongside affiliates self-requesting payouts from the portal -
@@ -25,14 +29,16 @@ def generate_payout_batch(period_start: str | None = None, period_end: str | Non
 
 	created = []
 	for affiliate_name in affiliates_with_approved:
-		payout_name = generate_payout_batch_for_affiliate(
-			affiliate_name,
-			period_start=period_start,
-			period_end=period_end,
-			minimum_cashout=minimum_cashout,
-		)
-		if payout_name:
-			created.append(payout_name)
+		for currency in sorted(get_unpaid_out_commissions_by_currency(affiliate_name)):
+			payout_name = generate_payout_batch_for_affiliate(
+				affiliate_name,
+				period_start=period_start,
+				period_end=period_end,
+				minimum_cashout=minimum_cashout,
+				currency=currency,
+			)
+			if payout_name:
+				created.append(payout_name)
 
 	return created
 
@@ -42,18 +48,23 @@ def generate_payout_batch_for_affiliate(
 	period_start: str | None = None,
 	period_end: str | None = None,
 	minimum_cashout: float | None = None,
+	currency: str | None = None,
 ):
 	"""Creates a single Affiliate Payout for one affiliate's currently
-	unpaid-out Approved commissions (i.e. Approved and not already
-	attached to some other Payout - whether that other Payout came from
-	a previous batch run or an affiliate's own self-request). Returns
-	the new Payout's name, or None if there was nothing eligible to pay
-	out or the affiliate hasn't reached the minimum cashout threshold.
+	unpaid-out Approved commissions IN ONE CURRENCY (i.e. Approved, not
+	already attached to some other Payout, and matching `currency`).
+	Returns the new Payout's name, or None if there was nothing eligible
+	to pay out in that currency or the currency's balance hasn't reached
+	the minimum cashout threshold. `currency` defaults to the site's
+	company currency - use generate_payout_batch (which iterates all
+	currency groups) rather than calling this directly for affiliates
+	that earn in several currencies.
 	"""
 	if minimum_cashout is None:
 		minimum_cashout = frappe.db.get_single_value("Affiliate Settings", "minimum_cashout") or 0
 
-	commissions = get_unpaid_out_commissions(affiliate_name)
+	currency = currency or get_company_currency()
+	commissions = get_unpaid_out_commissions_by_currency(affiliate_name).get(currency, [])
 	if not commissions:
 		return None
 
@@ -69,6 +80,7 @@ def generate_payout_batch_for_affiliate(
 			"generated_date": today(),
 			"period_start": period_start,
 			"period_end": period_end,
+			"currency": currency,
 			"amount": total_amount,
 			"status": "Pending",
 			"payment_method": "Bank Transfer",

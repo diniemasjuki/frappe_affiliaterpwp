@@ -46,8 +46,54 @@ function sw(id) {
   }
 }
 
-function fmt(n) {
-  return 'RM' + (parseFloat(n) || 0).toFixed(2);
+// Currency symbols reported by the API (never hardcoded here - the
+// server derives them from the Currency doctype). Populated by
+// mergeCurrencySymbols() from every API response that mentions money.
+var CURRENCY_SYMBOLS = {};
+
+function mergeCurrencySymbols(map) {
+  if (map) {
+    for (var code in map) {
+      if (map.hasOwnProperty(code)) CURRENCY_SYMBOLS[code] = map[code];
+    }
+  }
+}
+
+function curSymbol(currency) {
+  return CURRENCY_SYMBOLS[currency] || currency || 'RM';
+}
+
+function fmt(n, currency) {
+  return curSymbol(currency) + (parseFloat(n) || 0).toFixed(2);
+}
+
+// "≈ RM1,250.00" - display-only conversion into the affiliate's chosen
+// currency; shown with a visible approx marker, never as an exact figure.
+function fmtEst(n, currency) {
+  return '\u2248 ' + fmt(n, currency);
+}
+
+// "MYR100.00 · SGD50.00" - exact per-currency breakdown.
+function fmtBreakdown(rows, key) {
+  return (rows || []).map(function(r) { return fmt(r[key], r.currency); }).join(' \u00b7 ');
+}
+
+// Card helper: main line = estimate in the chosen currency (or the
+// breakdown when no estimate is available), sub line = exact breakdown.
+function renderMoneyCard(valueElId, subElId, est, estCurrency, breakdownRows, breakdownKey) {
+  var valueEl = document.getElementById(valueElId);
+  var subEl = subElId ? document.getElementById(subElId) : null;
+  var breakdown = fmtBreakdown(breakdownRows, breakdownKey);
+
+  if (est !== null && est !== undefined) {
+    valueEl.textContent = fmtEst(est, estCurrency);
+  } else {
+    valueEl.textContent = breakdown || fmt(0, estCurrency);
+  }
+  if (subEl) {
+    subEl.textContent = (est !== null && est !== undefined && breakdown) ? breakdown : '';
+    subEl.style.display = subEl.textContent ? 'block' : 'none';
+  }
 }
 
 // Token dibaca dari pageData (rujuk www/affiliate.py) — bukan dari
@@ -393,6 +439,8 @@ function renderDashboard() {
   if (!PORTAL_DATA) return;
   var p = PORTAL_DATA.profile;
 
+  mergeCurrencySymbols(PORTAL_DATA.currency_symbols);
+
   document.getElementById('ap-affiliate-name').textContent = p.full_name;
   document.getElementById('ap-greeting').textContent = 'Welcome back, ' + (p.full_name || '').split(' ')[0];
   document.getElementById('ap-avatar').textContent = apInitials(p.full_name);
@@ -417,9 +465,12 @@ function renderDashboard() {
     document.getElementById('ap-copy-btn').style.display = 'none';
   }
 
-  document.getElementById('ap-total-sales').textContent = fmt(PORTAL_DATA.total_sales);
-  document.getElementById('ap-total-commission').textContent = fmt(PORTAL_DATA.total_commission);
-  document.getElementById('ap-available-balance').textContent = fmt(PORTAL_DATA.available_balance);
+  // Summary cards: approx. total in the affiliate's chosen display
+  // currency, with the exact per-currency figures as the sub line.
+  var estCur = PORTAL_DATA.default_currency;
+  renderMoneyCard('ap-total-sales', 'ap-total-sales-sub', PORTAL_DATA.total_sales_est, estCur, PORTAL_DATA.balances, 'total_sales');
+  renderMoneyCard('ap-total-commission', 'ap-total-commission-sub', PORTAL_DATA.total_commission_est, estCur, PORTAL_DATA.balances, 'total_commission');
+  renderMoneyCard('ap-available-balance', 'ap-available-balance-sub', PORTAL_DATA.available_balance_est, estCur, PORTAL_DATA.balances, 'available_balance');
 
   loadLeaderboard();
   loadCommissionStatus();
@@ -428,6 +479,7 @@ function renderDashboard() {
   populateProfileForm(p);
   populateReferralCodeForm(p);
   populatePaymentMethodForm(p);
+  populateCurrencyPreferenceForm(p);
   document.getElementById('ap-login-email').textContent = p.email_id || '-';
 }
 
@@ -477,6 +529,20 @@ function populatePaymentMethodForm(p) {
   document.getElementById('set-account-number').value = p.account_number || '';
 }
 
+function populateCurrencyPreferenceForm(p) {
+  var select = document.getElementById('set-default-currency');
+  if (!select) return;
+
+  var options = (PORTAL_DATA.available_currencies || []).filter(function(code) {
+    return code !== (p.default_currency || '');
+  });
+  // Keep the current choice first so it's visible even when the list is long.
+  select.innerHTML = '<option value="">' + (p.default_currency || '-') + ' (current)</option>' +
+    options.map(function(code) {
+      return '<option value="' + code + '">' + code + (CURRENCY_SYMBOLS[code] ? ' (' + CURRENCY_SYMBOLS[code] + ')' : '') + '</option>';
+    }).join('');
+}
+
 function badgeClass(status) {
   return 'ap-badge-' + status.toLowerCase();
 }
@@ -520,9 +586,9 @@ function renderReferrals(rows) {
     var date = (c.creation || '').split(' ')[0];
     return '<div class="' + rowClass + '">' +
       '<div><p class="ap-row-title">' + c.sales_order + '</p>' +
-      '<p class="ap-row-sub">' + date + ' &middot; ' + fmt(c.sales_order_amount) + ' sale</p></div>' +
+      '<p class="ap-row-sub">' + date + ' &middot; ' + fmt(c.sales_order_amount, c.sales_order_currency) + ' sale</p></div>' +
       '<div style="display:flex;align-items:center;gap:12px;">' +
-      '<span style="font-size:13px;font-weight:700;color:#111111;">' + fmt(c.commission_amount) + '</span>' +
+      '<span style="font-size:13px;font-weight:700;color:#111111;">' + fmt(c.commission_amount, c.currency) + '</span>' +
       '<span class="ap-badge ' + badgeClass(c.status) + '">' + formatStatusLabel(c.status) + '</span>' +
       '</div></div>';
   }).join('');
@@ -539,27 +605,44 @@ async function loadPayouts() {
   }
 }
 
+var CURRENT_PAYOUT_CURRENCY = '';
+
 function renderPayoutsSummary(data) {
-  document.getElementById('ap-payout-available').textContent = fmt(data.available_balance);
-  document.getElementById('ap-payout-total-paid').textContent = fmt(data.total_paid_out);
-  document.getElementById('ap-payout-pending').textContent = fmt(data.pending_payout);
+  mergeCurrencySymbols(data.currency_symbols);
+  var estCur = data.default_currency;
+
+  // Main lines: approx. totals in the affiliate's chosen currency;
+  // sub lines: exact per-currency figures.
+  renderMoneyCard('ap-payout-available', 'ap-payout-available-sub', data.available_balance_est, estCur, data.available_by_currency, 'amount');
+  renderMoneyCard('ap-payout-total-paid', 'ap-payout-total-paid-sub', data.total_paid_out_est, estCur, data.total_paid_out_by_currency, 'amount');
+  renderMoneyCard('ap-payout-pending', 'ap-payout-pending-sub', data.pending_payout_est, estCur, data.pending_payout_by_currency, 'amount');
 
   var btn = document.getElementById('ap-request-payout-btn');
   var hint = document.getElementById('ap-payout-request-hint');
+  CURRENT_PAYOUT_CURRENCY = '';
 
   if (data.has_open_payout) {
     btn.disabled = true;
     hint.textContent = 'You already have a payout in progress.';
-  } else if (data.available_balance <= 0) {
+  } else if (!data.available_by_currency.length) {
     btn.disabled = true;
     hint.textContent = 'No approved commissions available to cash out yet.';
-  } else if (data.available_balance < data.minimum_cashout) {
+  } else if (!data.cashable_currencies.length) {
     btn.disabled = true;
-    var shortfall = data.minimum_cashout - data.available_balance;
-    hint.textContent = 'You need ' + fmt(shortfall) + ' more to reach the ' + fmt(data.minimum_cashout) + ' minimum.';
+    // Every currency is below the threshold on its own - a mixed total
+    // is not cashable, so show exactly what each currency is short of.
+    hint.textContent = data.available_by_currency.map(function(row) {
+      var shortfall = data.minimum_cashout - row.amount;
+      return row.currency + ': need ' + fmt(shortfall, row.currency) + ' more to reach the ' + fmt(data.minimum_cashout, row.currency) + ' minimum.';
+    }).join(' ');
   } else {
+    // Request the first cashable currency; once its payout completes,
+    // the next one becomes requestable. One currency per payout.
+    CURRENT_PAYOUT_CURRENCY = data.cashable_currencies[0];
+    var ready = data.available_by_currency.filter(function(row) { return row.meets_minimum; });
     btn.disabled = false;
-    hint.textContent = fmt(data.available_balance) + ' is ready to request.';
+    var readyText = ready.map(function(row) { return fmt(row.amount, row.currency); }).join(', ');
+    hint.textContent = readyText + ' is ready to request' + (ready.length > 1 ? ' (one currency at a time - ' + CURRENT_PAYOUT_CURRENCY + ' first).' : '.');
   }
 }
 
@@ -568,7 +651,7 @@ async function apRequestPayout() {
   btn.disabled = true;
   btn.textContent = 'Requesting...';
   try {
-    await API('affiliate.api.portal_api.request_payout', {});
+    await API('affiliate.api.portal_api.request_payout', { currency: CURRENT_PAYOUT_CURRENCY || '' });
     await loadPayouts();
   } catch (e) {
     alert(e.message || 'Could not request payout.');
@@ -593,7 +676,7 @@ function renderPayoutsList(rows) {
       '<div><p class="ap-row-title">' + (p.bill_no || p.name) + '</p>' +
       '<p class="ap-row-sub">' + (p.generated_date || '-') + ' &middot; ' + period + ' &middot; ' + (p.payment_method || 'Bank Transfer') + '</p></div>' +
       '<div style="display:flex;align-items:center;gap:12px;">' +
-      '<span style="font-size:13px;font-weight:700;color:#111111;">' + fmt(p.amount) + '</span>' +
+      '<span style="font-size:13px;font-weight:700;color:#111111;">' + fmt(p.amount, p.currency) + '</span>' +
       '<span class="ap-badge ' + badgeClass(p.status || 'Pending') + '">' + (p.status || 'Pending') + '</span>' +
       '</div></div>';
   }).join('');
@@ -619,6 +702,7 @@ function rankBadgeClass(rank) {
 function renderLeaderboard(data) {
   var el = document.getElementById('ap-leaderboard');
   var rows = data.leaderboard || [];
+  CURRENCY_SYMBOLS[data.currency] = data.symbol || data.currency;
 
   if (!rows.length) {
     el.innerHTML = '<div class="ap-empty">' +
@@ -635,7 +719,7 @@ function renderLeaderboard(data) {
     return '<div class="' + rowClass + '">' +
       '<div class="' + rankBadgeClass(r.rank) + '">' + r.rank + '</div>' +
       '<div class="ap-board-name">' + r.first_name + youTag + '</div>' +
-      '<div class="ap-board-sales">' + fmt(r.total_sales) + '</div>' +
+      '<div class="ap-board-sales">' + fmt(r.total_sales, data.currency) + '</div>' +
       '</div>';
   }).join('');
 
@@ -644,7 +728,7 @@ function renderLeaderboard(data) {
     html += '<div class="ap-board-your-rank ap-board-row you">' +
       '<div class="ap-board-rank">' + data.your_rank + '</div>' +
       '<div class="ap-board-name">You<span class="you-tag">You</span></div>' +
-      '<div class="ap-board-sales">' + fmt(data.your_total_sales) + '</div>' +
+      '<div class="ap-board-sales">' + fmt(data.your_total_sales, data.currency) + '</div>' +
       '</div>';
   }
 
@@ -665,11 +749,13 @@ async function loadCommissionStatus() {
 
 function renderCommissionStatus(data) {
   var el = document.getElementById('ap-commission-status');
-  var unpaid = data.unpaid_amount || 0;
-  var paid = data.paid_amount || 0;
-  var total = unpaid + paid;
+  mergeCurrencySymbols(data.currency_symbols);
+  var perCurrency = data.per_currency || [];
 
-  if (total === 0) {
+  var hasAny = perCurrency.some(function(row) {
+    return (row.unpaid_amount || 0) > 0 || (row.paid_amount || 0) > 0;
+  });
+  if (!hasAny) {
     el.innerHTML = '<div class="ap-empty">' +
       '<p class="ap-empty-title">No commissions yet</p>' +
       '<p class="ap-empty-sub">Share your referral code to start earning.</p>' +
@@ -677,28 +763,46 @@ function renderCommissionStatus(data) {
     return;
   }
 
-  var unpaidPct = (unpaid / total) * 100;
-  var paidPct = 100 - unpaidPct;
+  var estCur = data.default_currency;
+  var unpaidEst = data.unpaid_amount_est;
+  var paidEst = data.paid_amount_est;
+  var html = '';
 
-  el.innerHTML =
-    '<div class="ap-status-bar">' +
-      '<div class="ap-status-seg-unpaid" style="width:' + unpaidPct + '%"></div>' +
-      '<div class="ap-status-seg-paid" style="width:' + paidPct + '%"></div>' +
-    '</div>' +
-    '<div class="ap-status-legend-row">' +
-      '<div>' +
-        '<span class="ap-status-dot" style="background:#E8A33D"></span>' +
-        '<span class="ap-status-label">Unpaid</span>' +
-        '<p class="ap-status-value">' + fmt(unpaid) + '</p>' +
-        '<p class="ap-status-count">' + data.unpaid_count + ' commission' + (data.unpaid_count === 1 ? '' : 's') + '</p>' +
-      '</div>' +
-      '<div>' +
-        '<span class="ap-status-dot" style="background:#E4DECF"></span>' +
-        '<span class="ap-status-label">Paid</span>' +
-        '<p class="ap-status-value">' + fmt(paid) + '</p>' +
-        '<p class="ap-status-count">' + data.paid_count + ' commission' + (data.paid_count === 1 ? '' : 's') + '</p>' +
-      '</div>' +
-    '</div>';
+  // The proportion bar only renders when a full estimate exists - with
+  // a missing rate the ratio between exact currencies would be guesswork.
+  if (unpaidEst !== null && unpaidEst !== undefined && paidEst !== null && paidEst !== undefined && (unpaidEst + paidEst) > 0) {
+    var unpaidPct = (unpaidEst / (unpaidEst + paidEst)) * 100;
+    var paidPct = 100 - unpaidPct;
+    html +=
+      '<div class="ap-status-bar">' +
+        '<div class="ap-status-seg-unpaid" style="width:' + unpaidPct + '%"></div>' +
+        '<div class="ap-status-seg-paid" style="width:' + paidPct + '%"></div>' +
+      '</div>';
+  }
+
+  html += '<div class="ap-status-legend-row">' + perCurrency.map(function(row) {
+    var parts = [];
+    parts.push('<span class="ap-status-dot" style="background:#E8A33D"></span>' +
+      '<span class="ap-status-label">Unpaid (' + row.currency + ')</span>' +
+      '<p class="ap-status-value">' + fmt(row.unpaid_amount, row.currency) + '</p>' +
+      '<p class="ap-status-count">' + row.unpaid_count + ' commission' + (row.unpaid_count === 1 ? '' : 's') + '</p>');
+    parts.push('<span class="ap-status-dot" style="background:#E4DECF"></span>' +
+      '<span class="ap-status-label">Paid (' + row.currency + ')</span>' +
+      '<p class="ap-status-value">' + fmt(row.paid_amount, row.currency) + '</p>' +
+      '<p class="ap-status-count">' + row.paid_count + ' commission' + (row.paid_count === 1 ? '' : 's') + '</p>');
+    return '<div>' + parts.join('') + '</div>';
+  }).join('');
+
+  if (unpaidEst !== null && unpaidEst !== undefined && paidEst !== null && paidEst !== undefined) {
+    html += '<div style="flex:1;min-width:140px;">' +
+      '<span class="ap-status-label" style="color:#9B9B9E">Total (' + estCur + ', est.)</span>' +
+      '<p class="ap-status-value">' + fmtEst(unpaidEst + paidEst, estCur) + '</p>' +
+      '<p class="ap-status-count">approx. exchange rate</p>' +
+      '</div>';
+  }
+
+  html += '</div>';
+  el.innerHTML = html;
 }
 
 async function apSetPerfPeriod(period) {
@@ -724,6 +828,37 @@ function renderPerformance(data) {
   var c = data.confirmed || {};
   var p = data.pending || {};
 
+  var symbols = {};
+  (c.per_currency || []).concat(p.per_currency || []).forEach(function(row) {
+    symbols[row.currency] = row.symbol || row.currency;
+  });
+  mergeCurrencySymbols(symbols);
+
+  function section(rows, s, isPending) {
+    // Exact per-currency lines, plus the approx. total in the
+    // affiliate's chosen display currency when a full rate set exists.
+    var pendingClass = isPending ? ' pending' : '';
+    var lines = (rows || []).map(function(row) {
+      return '<div class="ap-perf-metric' + pendingClass + '">' +
+        '<p class="ap-perf-metric-label">' + row.currency + '</p>' +
+        '<p class="ap-perf-metric-value">' + fmt(row.total_sales, row.currency) +
+        ' <span style="color:#9B9B9E;font-weight:400;">/</span> ' +
+        '<span class="' + (isPending ? '' : 'success') + '">' + fmt(row.total_commission, row.currency) + '</span></p>' +
+        '</div>';
+    }).join('');
+
+    var estLine = '';
+    if (s.total_sales_est !== null && s.total_sales_est !== undefined) {
+      estLine = '<div class="ap-perf-metric' + pendingClass + '">' +
+        '<p class="ap-perf-metric-label">Total (' + s.estimate_currency + ', est.)</p>' +
+        '<p class="ap-perf-metric-value">' + fmtEst(s.total_sales_est, s.estimate_currency) +
+        ' <span style="color:#9B9B9E;font-weight:400;">/</span> ' +
+        '<span class="' + (isPending ? '' : 'success') + '">' + fmtEst(s.total_commission_est, s.estimate_currency) + '</span></p>' +
+        '</div>';
+    }
+    return lines + estLine;
+  }
+
   el.innerHTML =
     '<p class="ap-perf-section-label">Confirmed</p>' +
     '<div class="ap-perf-grid" style="margin-bottom:16px;">' +
@@ -731,14 +866,7 @@ function renderPerformance(data) {
         '<p class="ap-perf-metric-label">Orders</p>' +
         '<p class="ap-perf-metric-value">' + (c.orders || 0) + '</p>' +
       '</div>' +
-      '<div class="ap-perf-metric">' +
-        '<p class="ap-perf-metric-label">Total sales</p>' +
-        '<p class="ap-perf-metric-value">' + fmt(c.total_sales) + '</p>' +
-      '</div>' +
-      '<div class="ap-perf-metric">' +
-        '<p class="ap-perf-metric-label">Commission</p>' +
-        '<p class="ap-perf-metric-value success">' + fmt(c.total_commission) + '</p>' +
-      '</div>' +
+      section(c.per_currency, c, false) +
     '</div>' +
     '<p class="ap-perf-section-label">Pending review <span class="note">- not yet confirmed, may change</span></p>' +
     '<div class="ap-perf-grid">' +
@@ -746,14 +874,7 @@ function renderPerformance(data) {
         '<p class="ap-perf-metric-label">Orders</p>' +
         '<p class="ap-perf-metric-value">' + (p.orders || 0) + '</p>' +
       '</div>' +
-      '<div class="ap-perf-metric pending">' +
-        '<p class="ap-perf-metric-label">Total sales</p>' +
-        '<p class="ap-perf-metric-value">' + fmt(p.total_sales) + '</p>' +
-      '</div>' +
-      '<div class="ap-perf-metric pending">' +
-        '<p class="ap-perf-metric-label">Commission</p>' +
-        '<p class="ap-perf-metric-value">' + fmt(p.total_commission) + '</p>' +
-      '</div>' +
+      section(p.per_currency, p, true) +
     '</div>';
 }
 
@@ -812,14 +933,20 @@ function apShowSaved(elId) {
 
 async function apSaveProfile() {
   try {
-    await API('affiliate.api.portal_api.update_settings', {
+    var payload = {
       full_name: document.getElementById('set-full-name').value,
       phone: getPhoneValue(itiSettings, document.getElementById('set-phone')),
       gender: document.getElementById('set-gender').value,
       date_of_birth: document.getElementById('set-dob').value,
       address: document.getElementById('set-address').value,
-    });
+    };
+    var currencySelect = document.getElementById('set-default-currency');
+    if (currencySelect && currencySelect.value) {
+      payload.default_currency = currencySelect.value;
+    }
+    await API('affiliate.api.portal_api.update_settings', payload);
     apShowSaved('profile-saved');
+    await loadDashboard();
   } catch (e) {
     alert(e.message || 'Could not save profile.');
   }

@@ -27,10 +27,17 @@
   "last_referral_code_change",
   "commission_rate",
   "commission_base",
+  "default_currency",
   "column_break_kpcj",
   "total_sales",
   "total_commission",
   "available_balance",
+  "balances_section",
+  "balances",
+  "estimated_totals_section",
+  "total_sales_est",
+  "total_commission_est",
+  "available_balance_est",
   "payout_details_section",
   "sales_partner",
   "column_break_ejzs",
@@ -155,25 +162,77 @@
    "options": "\nGross\nNett"
   },
   {
+   "description": "Currency the affiliate prefers for display. Defaults to the site's company currency when blank. The portal shows estimated totals (approx.) converted into this currency; exact amounts are always kept per sale currency in Balances by Currency below.",
+   "fieldname": "default_currency",
+   "fieldtype": "Link",
+   "label": "Preferred Display Currency",
+   "options": "Currency"
+  },
+  {
    "fieldname": "column_break_kpcj",
    "fieldtype": "Column Break"
   },
   {
+   "description": "Estimated total converted into the site's default company currency (approx., for uniform reporting/leaderboard ranking). Exact per-currency figures are in Balances by Currency.",
    "fieldname": "total_sales",
    "fieldtype": "Currency",
    "label": "Total Sales",
    "read_only": 1
   },
   {
+   "description": "Estimated total converted into the site's default company currency (approx.). Exact per-currency figures are in Balances by Currency.",
    "fieldname": "total_commission",
    "fieldtype": "Currency",
    "label": "Total Commission",
    "read_only": 1
   },
   {
+   "description": "Estimated total converted into the site's default company currency (approx.). Exact per-currency figures are in Balances by Currency.",
    "fieldname": "available_balance",
    "fieldtype": "Currency",
    "label": "Available Balance",
+   "read_only": 1
+  },
+  {
+   "fieldname": "balances_section",
+   "fieldtype": "Section Break",
+   "label": "Balances by Currency"
+  },
+  {
+   "description": "Exact totals per currency, in each sale's original transaction currency. Maintained automatically - do not edit.",
+   "fieldname": "balances",
+   "fieldtype": "Table",
+   "label": "Balances",
+   "options": "Affiliate Currency Balance",
+   "read_only": 1
+  },
+  {
+   "fieldname": "estimated_totals_section",
+   "fieldtype": "Section Break",
+   "label": "Estimated Totals (Preferred Display Currency)"
+  },
+  {
+   "description": "Approx. conversion of all currencies into the Preferred Display Currency, using Currency Exchange rates. Shows 0 when no rate is available for any component (the portal hides the estimate in that case).",
+   "fieldname": "total_sales_est",
+   "fieldtype": "Currency",
+   "label": "Total Sales (Est.)",
+   "options": "default_currency",
+   "read_only": 1
+  },
+  {
+   "description": "Approx. conversion of all currencies into the Preferred Display Currency, using Currency Exchange rates. Shows 0 when no rate is available for any component (the portal hides the estimate in that case).",
+   "fieldname": "total_commission_est",
+   "fieldtype": "Currency",
+   "label": "Total Commission (Est.)",
+   "options": "default_currency",
+   "read_only": 1
+  },
+  {
+   "description": "Approx. conversion of all currencies into the Preferred Display Currency, using Currency Exchange rates. Shows 0 when no rate is available for any component (the portal hides the estimate in that case).",
+   "fieldname": "available_balance_est",
+   "fieldtype": "Currency",
+   "label": "Available Balance (Est.)",
+   "options": "default_currency",
    "read_only": 1
   },
   {

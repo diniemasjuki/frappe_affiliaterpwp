@@ -108,6 +108,7 @@ textarea { resize: vertical; min-height: 70px; }
 .ap-metric-card { background: #fff; border-radius: 10px; padding: 13px 15px; border: 1px solid #E2E2E4; }
 .ap-metric-label { font-size: 11px; color: #6B6B6E; margin: 0 0 4px; }
 .ap-metric-value { font-size: 18px; font-weight: 700; margin: 0; color: #111111; }
+.ap-metric-sub { font-size: 11px; color: #9B9B9E; margin: 4px 0 0; line-height: 1.5; }
 
 .ap-tabs-row { display: flex; gap: 4px; border-bottom: 1px solid #E2E2E4; margin-bottom: 16px; }
 .ap-tab-btn { border: none; background: none; padding: 8px 4px; margin-right: 18px; font-size: 13px; font-weight: 500; cursor: pointer; color: #6B6B6E; border-bottom: 2px solid transparent; }

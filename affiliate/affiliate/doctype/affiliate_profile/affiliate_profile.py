@@ -19,16 +19,20 @@ class AffiliateProfile(Document):
 	from typing import TYPE_CHECKING
 
 	if TYPE_CHECKING:
+		from affiliate.affiliate.doctype.affiliate_currency_balance.affiliate_currency_balance import AffiliateCurrencyBalance
 		from frappe.types import DF
 
 		account_name: DF.Data | None
 		account_number: DF.Data | None
 		address: DF.SmallText | None
 		available_balance: DF.Currency
+		available_balance_est: DF.Currency
+		balances: DF.Table[AffiliateCurrencyBalance]
 		bank_name: DF.Data | None
 		commission_base: DF.Literal["", "Gross", "Nett"] | None
 		commission_rate: DF.Percent
 		date_of_birth: DF.Date | None
+		default_currency: DF.Link | None
 		document_id: DF.Attach | None
 		email_id: DF.Data
 		full_name: DF.Data | None
@@ -40,7 +44,9 @@ class AffiliateProfile(Document):
 		sales_partner: DF.Link | None
 		status: DF.Literal["Pending Verification", "Verified"]
 		total_commission: DF.Currency
+		total_commission_est: DF.Currency
 		total_sales: DF.Currency
+		total_sales_est: DF.Currency
 		user: DF.Link | None
 	# end: auto-generated types
 

@@ -302,14 +302,17 @@
           <div class="ap-metric-card">
             <p class="ap-metric-label">Total sales</p>
             <p class="ap-metric-value" id="ap-total-sales">RM0.00</p>
+            <p class="ap-metric-sub" id="ap-total-sales-sub" style="display:none"></p>
           </div>
           <div class="ap-metric-card">
             <p class="ap-metric-label">Total commission</p>
             <p class="ap-metric-value" id="ap-total-commission">RM0.00</p>
+            <p class="ap-metric-sub" id="ap-total-commission-sub" style="display:none"></p>
           </div>
           <div class="ap-metric-card">
             <p class="ap-metric-label">Available balance</p>
             <p class="ap-metric-value" id="ap-available-balance">RM0.00</p>
+            <p class="ap-metric-sub" id="ap-available-balance-sub" style="display:none"></p>
           </div>
         </div>
 
@@ -365,14 +368,17 @@
           <div class="ap-metric-card">
             <p class="ap-metric-label">Available balance</p>
             <p class="ap-metric-value" id="ap-payout-available">RM0.00</p>
+            <p class="ap-metric-sub" id="ap-payout-available-sub" style="display:none"></p>
           </div>
           <div class="ap-metric-card">
             <p class="ap-metric-label">Total paid out</p>
             <p class="ap-metric-value" id="ap-payout-total-paid">RM0.00</p>
+            <p class="ap-metric-sub" id="ap-payout-total-paid-sub" style="display:none"></p>
           </div>
           <div class="ap-metric-card">
             <p class="ap-metric-label">Pending payout</p>
             <p class="ap-metric-value" id="ap-payout-pending">RM0.00</p>
+            <p class="ap-metric-sub" id="ap-payout-pending-sub" style="display:none"></p>
           </div>
         </div>
 
@@ -432,6 +438,11 @@
           <div class="f">
             <label class="lbl">Address</label>
             <textarea id="set-address"></textarea>
+          </div>
+          <div class="f">
+            <label class="lbl">Preferred display currency</label>
+            <select id="set-default-currency"></select>
+            <p class="ap-field-hint">Totals are shown exactly in each sale's currency; an approximate combined total is displayed in this currency.</p>
           </div>
           <button class="btn btn-p" onclick="apSaveProfile()">Save changes</button>
         </div>

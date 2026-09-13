@@ -19,6 +19,7 @@
   "column_break_gxzh",
   "period_end",
   "amount_and_commissions_section",
+  "currency",
   "amount",
   "commissions"
  ],
@@ -91,10 +92,21 @@
    "label": "Amount and Commissions"
   },
   {
+   "description": "Currency of this payout. A payout can only combine commissions of ONE currency - mixed-currency balances are paid out separately per currency.",
+   "fieldname": "currency",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Currency",
+   "options": "Currency",
+   "read_only": 1
+  },
+  {
    "fieldname": "amount",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "Amount"
+   "label": "Amount",
+   "options": "currency"
   },
   {
    "fieldname": "commissions",
