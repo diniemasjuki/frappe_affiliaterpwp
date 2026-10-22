@@ -44,6 +44,7 @@
   "total_commission_est",
   "available_balance_est",
   "payout_details_section",
+  "payout_mode",
   "sales_partner",
   "column_break_ejzs",
   "bank_name",
@@ -275,6 +276,14 @@
    "fieldname": "payout_details_section",
    "fieldtype": "Section Break",
    "label": "Payout Details"
+  },
+  {
+   "default": "Manual Claim",
+   "description": "How the affiliate receives commission payouts. Manual Claim: they request a payout themselves from the portal whenever their balance qualifies. Monthly: a payout is generated automatically for them on the site's Monthly Payout Day (Affiliate Settings), and manual claiming is disabled.",
+   "fieldname": "payout_mode",
+   "fieldtype": "Select",
+   "label": "Payout Mode",
+   "options": "Manual Claim\nMonthly"
   },
   {
    "fieldname": "sales_partner",

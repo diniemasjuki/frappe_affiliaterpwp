@@ -147,7 +147,6 @@ textarea { resize: vertical; min-height: 70px; }
 .ap-board-row.you .ap-board-rank { background: #1A1A1A; color: #fff; border: none; }
 .ap-board-name { flex: 1; font-size: 12px; font-weight: 600; color: #111111; }
 .ap-board-name .you-tag { font-size: 9px; font-weight: 700; color: #fff; background: #1A1A1A; padding: 2px 6px; border-radius: 4px; margin-left: 6px; }
-.ap-board-sales { font-size: 12px; font-weight: 700; color: #111111; font-variant-numeric: tabular-nums; }
 .ap-board-your-rank { border-top: 1px dashed #E2E2E4; margin-top: 6px; padding-top: 8px; }
 
 .ap-status-bar { display: flex; gap: 2px; height: 12px; border-radius: 6px; overflow: hidden; margin-bottom: 14px; background: #F0F0F1; }

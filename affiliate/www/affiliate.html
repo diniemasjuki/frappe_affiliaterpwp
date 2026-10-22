@@ -515,6 +515,14 @@
         <div class="ap-settings-card ap-settings-form">
           <div class="msg-success" id="payment-saved">Saved.</div>
           <div class="f">
+            <label class="lbl">Payout schedule</label>
+            <select id="set-payout-mode">
+              <option value="Manual Claim">Manual claim - request whenever your balance qualifies</option>
+              <option value="Monthly">Monthly - payout generated automatically once a month</option>
+            </select>
+            <p class="ap-field-hint">Manual claim: request a payout yourself from the Payouts page. Monthly: we generate your payout automatically each month on the date set by the admin - you don't need to request anything.</p>
+          </div>
+          <div class="f">
             <label class="lbl">Bank name</label>
             <input type="text" id="set-bank-name"/>
           </div>

@@ -18,6 +18,13 @@ from affiliate.api.currency_exchange import (
 	get_company_currency,
 	get_exchange_rate,
 )
+from affiliate.api.payout_batch import (
+	PAYOUT_MODE_MANUAL,
+	PAYOUT_MODE_MONTHLY,
+	PAYOUT_SOURCE_MANUAL,
+	next_monthly_payout_date,
+	resolve_payout_mode,
+)
 
 
 def _currency_symbols(currencies: list) -> dict:
@@ -226,6 +233,7 @@ def get_dashboard_data() -> dict:
 			"account_name": profile.account_name,
 			"account_number": profile.account_number,
 			"default_currency": profile.default_currency,
+			"payout_mode": resolve_payout_mode(profile.payout_mode),
 		},
 		"wizard_complete": wizard_complete,
 		"commission_rate": commission_rate,
@@ -263,7 +271,8 @@ def get_leaderboard() -> dict:
 	the logged-in affiliate's own rank (even if they're outside the
 	top 5). Only first names are exposed for other affiliates -
 	that's a deliberate privacy choice, not an oversight, so never add
-	full_name/email/phone/etc. to this endpoint's output.
+	full_name/email/phone/etc. to this endpoint's output. Sales amounts
+	are likewise never exposed - the ranking is computed server-side.
 	"""
 	profile = get_logged_in_profile()
 
@@ -279,7 +288,6 @@ def get_leaderboard() -> dict:
 		{
 			"rank": idx + 1,
 			"first_name": (row.full_name or "Affiliate").split(" ")[0],
-			"total_sales": row.total_sales,
 			"is_you": row.name == profile.name,
 		}
 		for idx, row in enumerate(top_affiliates)
@@ -298,17 +306,11 @@ def get_leaderboard() -> dict:
 			+ 1
 		)
 
-	# total_sales is stored uniformly in the site's company currency
-	# (approx., converted for comparability) - tell the portal which
-	# currency that is so it formats amounts correctly.
-	company_currency = get_company_currency()
-
+	# total_sales is only used server-side for ranking - never sent to
+	# the portal, so no currency info is needed either.
 	return {
 		"leaderboard": leaderboard,
 		"your_rank": your_rank,
-		"your_total_sales": profile.total_sales,
-		"currency": company_currency,
-		"symbol": currency_symbol(company_currency),
 	}
 
 
@@ -536,6 +538,13 @@ def get_payouts_summary() -> dict:
 
 	minimum_cashout = frappe.get_cached_value("Affiliate Settings", None, "minimum_cashout") or 0
 
+	# Payout mode decides how this affiliate gets paid out: Monthly
+	# (batch generates their payouts automatically) or Manual Claim
+	# (they request from this page). The request button only applies to
+	# Manual Claim.
+	payout_mode = resolve_payout_mode(profile.payout_mode)
+	next_payout_date = next_monthly_payout_date() if payout_mode == PAYOUT_MODE_MONTHLY else None
+
 	grouped = get_unpaid_out_commissions_by_currency(profile.name)
 	available_by_currency = []
 	cashable_currencies = []
@@ -581,7 +590,13 @@ def get_payouts_summary() -> dict:
 		"pending_payout_est": _estimate(pending_by_currency, default_currency),
 		"cashable_currencies": cashable_currencies,
 		"has_open_payout": has_open_payout,
-		"can_request_payout": (not has_open_payout) and bool(cashable_currencies),
+		"payout_mode": payout_mode,
+		"next_payout_date": next_payout_date,
+		"can_request_payout": (
+			(not has_open_payout)
+			and bool(cashable_currencies)
+			and payout_mode == PAYOUT_MODE_MANUAL
+		),
 	}
 
 
@@ -608,6 +623,13 @@ def request_payout(currency: str = "") -> dict:
 	commissions themselves.
 	"""
 	profile = get_logged_in_profile()
+
+	if resolve_payout_mode(profile.payout_mode) == PAYOUT_MODE_MONTHLY:
+		# Server-side guard, not just a hidden button - a Monthly
+		# affiliate's payouts come exclusively from the scheduled batch.
+		frappe.throw(
+			_("Your account is on the monthly payout schedule. Your payout is generated automatically on the monthly payout date - you don't need to request it.")
+		)
 
 	if not profile.account_number:
 		frappe.throw(
@@ -679,6 +701,7 @@ def request_payout(currency: str = "") -> dict:
 		"generated_date": today,
 		"status": "Pending",
 		"payment_method": "Bank Transfer",
+		"source": PAYOUT_SOURCE_MANUAL,
 		"period_start": frappe.utils.add_months(today, -1),
 		"period_end": today,
 		"currency": currency,
@@ -1061,6 +1084,7 @@ def update_settings(**fields) -> dict:
 		"account_name",
 		"account_number",
 		"default_currency",
+		"payout_mode",
 	}
 
 	previous_default_currency = profile.default_currency
@@ -1070,6 +1094,9 @@ def update_settings(**fields) -> dict:
 			if fieldname == "default_currency" and value:
 				if not frappe.db.get_value("Currency", value, "enabled"):
 					frappe.throw(_("Invalid currency."))
+			if fieldname == "payout_mode" and value:
+				if value not in (PAYOUT_MODE_MANUAL, PAYOUT_MODE_MONTHLY):
+					frappe.throw(_("Invalid payout mode. Choose either {0} or {1}.").format(PAYOUT_MODE_MANUAL, PAYOUT_MODE_MONTHLY))
 			if fieldname == "full_name" and value:
 				# Sama seperti submit_wizard_step1: nama sentiasa uppercase.
 				value = value.strip().upper()

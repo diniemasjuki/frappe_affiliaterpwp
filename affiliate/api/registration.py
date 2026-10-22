@@ -67,6 +67,7 @@ def register_affiliate(
 				"email_id": email,
 				"full_name": f"{first_name} {last_name}",
 				"status": "Pending Verification",
+				"payout_mode": _default_payout_mode(),
 			}
 		)
 		profile.insert(ignore_permissions=True)
@@ -125,11 +126,20 @@ def _register_current_user(first_name: str, last_name: str, email: str) -> dict:
 			"email_id": frappe.session.user,
 			"full_name": f"{first_name} {last_name}",
 			"status": "Pending Verification",
+			"payout_mode": _default_payout_mode(),
 		}
 	)
 	profile.insert(ignore_permissions=True)
 
 	return {"success": True, "profile": profile.name}
+
+
+def _default_payout_mode() -> str:
+	"""Payout mode pre-selected for a new affiliate: the admin's
+	Default Payout Mode from Affiliate Settings. The affiliate can still
+	change it themselves from the portal's Payment method tab.
+	"""
+	return frappe.db.get_single_value("Affiliate Settings", "default_payout_mode") or "Manual Claim"
 
 
 def _validate_registration_input(first_name: str, last_name: str, email: str, password: str):

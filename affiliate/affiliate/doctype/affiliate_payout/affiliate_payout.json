@@ -13,6 +13,7 @@
   "generated_date",
   "column_break_wevx",
   "status",
+  "source",
   "payment_method",
   "period_section",
   "period_start",
@@ -60,6 +61,15 @@
    "in_list_view": 1,
    "label": "Status",
    "options": "Pending\nProcessing\nPaid"
+  },
+  {
+   "default": "Manual Claim",
+   "description": "How this payout was created. Monthly Batch: generated automatically by the monthly payout run for affiliates on the Monthly payout mode. Manual Claim: requested by the affiliate from the portal, or created by hand in Desk.",
+   "fieldname": "source",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Source",
+   "options": "Manual Claim\nMonthly Batch"
   },
   {
    "default": "Bank Transfer",

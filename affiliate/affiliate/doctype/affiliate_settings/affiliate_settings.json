@@ -6,10 +6,14 @@
  "doctype": "DocType",
  "engine": "InnoDB",
   "field_order": [
-   "referral_code_prefix",
    "referral_code_name_length",
    "default_commission_percent",
    "minimum_cashout",
+   "payout_schedule_section",
+   "default_payout_mode",
+   "column_break_psched",
+   "monthly_payout_day",
+   "last_monthly_batch_run",
    "commission_calculation_section",
    "commission_base",
    "commission_on_addons",
@@ -31,22 +35,11 @@
   ],
  "fields": [
   {
-   "default": "RC",
-   "description": "Letters prefixed to every auto-generated referral code. Combined with the Name Length below, the total must not exceed 8 characters (the referral_code field's max length).",
-   "fieldname": "referral_code_prefix",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "label": "Referral Code Prefix",
-   "reqd": 1
-  },
-  {
-   "default": "6",
-   "description": "Number of characters (derived from the affiliate's full name, padded with 0) that follow the prefix in an auto-generated referral code. Prefix length + this value must not exceed 8, or auto-generated codes would overflow the 8-character referral_code field.",
+   "description": "Number of characters taken from the affiliate's full name when auto-generating a referral code, up to 8 (the referral_code field's max length). Shorter names are right-padded with 0. Leave 0/blank for the full 8.",
    "fieldname": "referral_code_name_length",
    "fieldtype": "Int",
    "in_list_view": 1,
-   "label": "Referral Code Name Length",
-   "reqd": 1
+   "label": "Referral Code Name Length"
   },
   {
    "default": "2",
@@ -59,6 +52,36 @@
    "fieldname": "minimum_cashout",
    "fieldtype": "Currency",
    "label": "Minimum Cashout"
+  },
+  {
+   "fieldname": "payout_schedule_section",
+   "fieldtype": "Section Break",
+   "label": "Payout Schedule"
+  },
+  {
+   "default": "Manual Claim",
+   "description": "Payout mode pre-selected for newly registered affiliates. Existing affiliates keep whatever they chose themselves in their portal settings.",
+   "fieldname": "default_payout_mode",
+   "fieldtype": "Select",
+   "label": "Default Payout Mode",
+   "options": "Manual Claim\nMonthly"
+  },
+  {
+   "fieldname": "column_break_psched",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Day of the month (1-28) on which the monthly payout batch is generated for affiliates whose payout mode is Monthly. Leave 0/blank to disable monthly payouts entirely. A batch that couldn't run on the day itself (e.g. downtime) is generated automatically on the first day the scheduler runs afterwards - each period only ever runs once.",
+   "fieldname": "monthly_payout_day",
+   "fieldtype": "Int",
+   "label": "Monthly Payout Day"
+  },
+  {
+   "description": "Date the monthly payout batch last ran. Auto-tracked by the scheduler - do not edit. Used to make the monthly batch idempotent: each scheduled period only ever generates one batch, even across restarts or catch-up days.",
+   "fieldname": "last_monthly_batch_run",
+   "fieldtype": "Date",
+   "label": "Last Monthly Batch Run",
+   "read_only": 1
   },
   {
    "fieldname": "commission_calculation_section",

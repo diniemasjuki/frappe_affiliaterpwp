@@ -41,23 +41,20 @@ class TestAffiliateProfile(UnitTestCase):
 	UnitTestCase avoids the broken bootstrap entirely.
 	"""
 
-	EXTRA_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
-	IGNORE_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
-
 	def setUp(self):
 		self._original_settings = frappe.db.get_value(
 			"Affiliate Settings",
 			"Affiliate Settings",
-			["referral_code_prefix", "referral_code_name_length"],
+			["referral_code_name_length"],
 			as_dict=True,
 		)
 		# Reset to the known-good default config before each test so a
 		# bad value a previous test wrote straight to the DB can't leak
-		# into the next one.
+		# into the next one. Blank/0 = generator default (full 8).
 		frappe.db.set_value(
 			"Affiliate Settings",
 			"Affiliate Settings",
-			{"referral_code_prefix": "RC", "referral_code_name_length": 6},
+			{"referral_code_name_length": 0},
 		)
 		frappe.clear_cache()
 		self._cleanup = []
@@ -71,7 +68,6 @@ class TestAffiliateProfile(UnitTestCase):
 			"Affiliate Settings",
 			"Affiliate Settings",
 			{
-				"referral_code_prefix": self._original_settings.referral_code_prefix,
 				"referral_code_name_length": self._original_settings.referral_code_name_length,
 			},
 		)
@@ -85,44 +81,44 @@ class TestAffiliateProfile(UnitTestCase):
 		return doc
 
 	def test_generate_default_produces_exactly_8_chars(self):
+		# "Ahmad Bin Ali" -> letters "AHMADBINALI" -> first 8 chars.
 		code = self._new_profile("Ahmad Bin Ali")._generate_unique_referral_code()
-		self.assertEqual(len(code), 8)
-		self.assertTrue(code.startswith("RC"))
+		self.assertEqual(code, "AHMADBIN")
 
 	def test_generate_clamps_oversize_settings_via_db(self):
-		# Simulate a bad config that was written straight to the DB
-		# (bypassing settings.validate()): prefix "RC" (2) + name_length 8
-		# would naively produce a 10-char code. The generator must clamp
-		# it to 8 regardless, because the value is written via db_set()
-		# which skips field validation.
+		# Simulate a bad config written straight to the DB (bypassing
+		# settings.validate()): name_length 20 would naively overflow the
+		# 8-char field. The generator must clamp it to 8 regardless,
+		# because the code is written via db_set() which skips field
+		# validation.
 		frappe.db.set_value(
-			"Affiliate Settings", "Affiliate Settings", "referral_code_name_length", 8
+			"Affiliate Settings", "Affiliate Settings", "referral_code_name_length", 20
 		)
 		frappe.clear_cache()
 		code = self._new_profile("Ahmad Bin Ali")._generate_unique_referral_code()
 		self.assertLessEqual(len(code), REFERRAL_CODE_MAX_LENGTH)
 
-	def test_generate_clamps_very_long_prefix_via_db(self):
+	def test_generate_clamps_negative_name_length_via_db(self):
+		# A negative value would make Python's [:n] slice drop the name
+		# entirely - clamp to a sane minimum instead.
 		frappe.db.set_value(
-			"Affiliate Settings",
-			"Affiliate Settings",
-			{"referral_code_prefix": "AFFILIATE", "referral_code_name_length": 4},
+			"Affiliate Settings", "Affiliate Settings", "referral_code_name_length", -5
 		)
 		frappe.clear_cache()
 		code = self._new_profile("Ahmad")._generate_unique_referral_code()
-		self.assertLessEqual(len(code), REFERRAL_CODE_MAX_LENGTH)
+		self.assertGreaterEqual(len(code), 1)
+		self.assertIn("A", code)
 
 	def test_generate_pads_short_name_to_8(self):
-		# "Abu" -> base letters "ABU" right-padded with 0 to name_length 6
-		# -> "ABU000" -> "RCABU000" (exactly 8).
+		# "Abu" -> base letters "ABU" right-padded with 0 (exactly 8).
 		code = self._new_profile("Abu")._generate_unique_referral_code()
 		self.assertEqual(len(code), 8)
-		self.assertEqual(code, "RCABU000")
+		self.assertEqual(code, "ABU00000")
 
 	def test_generate_handles_empty_name(self):
 		code = self._new_profile("")._generate_unique_referral_code()
 		self.assertEqual(len(code), 8)
-		self.assertEqual(code, "RC000000")
+		self.assertEqual(code, "00000000")
 
 	def test_generate_strips_non_alpha_from_name(self):
 		# Digits, spaces and punctuation in the name must not leak into
@@ -138,7 +134,7 @@ class TestAffiliateProfile(UnitTestCase):
 		# Pre-create a Sales Partner holding the exact base code the
 		# generator would otherwise produce for this name, so the first
 		# candidate collides and the generator must move to a suffix.
-		base_code = "RCAHMADB"  # "Ahmad Bin Ali" -> AHMADB -> RCAHMADB
+		base_code = "AHMADBIN"  # "Ahmad Bin Ali" -> letters -> first 8
 		sp_name = f"_test_collision_{random_string(6).lower()}"
 		territory = (
 			frappe.db.exists("Territory", "All Territories")

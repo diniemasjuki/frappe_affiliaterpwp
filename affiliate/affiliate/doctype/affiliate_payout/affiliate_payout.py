@@ -24,6 +24,7 @@ class AffiliatePayout(Document):
 		payment_method: DF.Data | None
 		period_end: DF.Date | None
 		period_start: DF.Date | None
+		source: DF.Literal["Manual Claim", "Monthly Batch"]
 		status: DF.Literal["Pending", "Processing", "Paid"]
 	# end: auto-generated types
 

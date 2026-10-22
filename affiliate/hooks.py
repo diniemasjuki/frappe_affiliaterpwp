@@ -165,23 +165,16 @@ after_install = "affiliate.install.after_install"
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"affiliate.tasks.all"
-# 	],
-# 	"daily": [
-# 		"affiliate.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"affiliate.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"affiliate.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"affiliate.tasks.monthly"
-# 	],
-# }
+# Daily check for the monthly payout batch (see
+# affiliate/api/payout_batch.py). The function itself is idempotent: it
+# only generates anything once per scheduled period, so a daily entry
+# is correct even though the batch is monthly - it's how missed days
+# (downtime on the payout day) catch up.
+scheduler_events = {
+	"daily": [
+		"affiliate.api.payout_batch.run_monthly_payout_batch_if_due",
+	],
+}
 
 # Testing
 # -------

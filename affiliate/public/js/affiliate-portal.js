@@ -839,6 +839,8 @@ function populatePaymentMethodForm(p) {
   document.getElementById('set-bank-name').value = p.bank_name || '';
   document.getElementById('set-account-name').value = p.account_name || '';
   document.getElementById('set-account-number').value = p.account_number || '';
+  var payoutMode = document.getElementById('set-payout-mode');
+  if (payoutMode) payoutMode.value = p.payout_mode || 'Manual Claim';
 }
 
 function populateCurrencyPreferenceForm(p) {
@@ -937,6 +939,19 @@ function renderPayoutsSummary(data) {
   var hint = document.getElementById('ap-payout-request-hint');
   CURRENT_PAYOUT_CURRENCY = '';
 
+  if (data.payout_mode === 'Monthly') {
+    // Monthly affiliates don't request payouts - the scheduled batch
+    // generates theirs automatically. Hide the button entirely so the
+    // page reads as informational, not as something they're waiting to
+    // click.
+    btn.style.display = 'none';
+    hint.textContent = data.next_payout_date
+      ? 'You are on monthly payouts. Your next payout is generated on ' + data.next_payout_date + ' - you don\'t need to request it.'
+      : 'You are on monthly payouts. Your payout is generated automatically once a month - you don\'t need to request it.';
+    return;
+  }
+  btn.style.display = '';
+
   if (data.has_open_payout) {
     btn.disabled = true;
     hint.textContent = 'You already have a payout in progress.';
@@ -1018,7 +1033,6 @@ function rankBadgeClass(rank) {
 function renderLeaderboard(data) {
   var el = document.getElementById('ap-leaderboard');
   var rows = data.leaderboard || [];
-  CURRENCY_SYMBOLS[data.currency] = data.symbol || data.currency;
 
   if (!rows.length) {
     el.innerHTML = '<div class="ap-empty">' +
@@ -1035,7 +1049,6 @@ function renderLeaderboard(data) {
     return '<div class="' + rowClass + '">' +
       '<div class="' + rankBadgeClass(r.rank) + '">' + r.rank + '</div>' +
       '<div class="ap-board-name">' + r.first_name + youTag + '</div>' +
-      '<div class="ap-board-sales">' + fmt(r.total_sales, data.currency) + '</div>' +
       '</div>';
   }).join('');
 
@@ -1044,7 +1057,6 @@ function renderLeaderboard(data) {
     html += '<div class="ap-board-your-rank ap-board-row you">' +
       '<div class="ap-board-rank">' + data.your_rank + '</div>' +
       '<div class="ap-board-name">You<span class="you-tag">You</span></div>' +
-      '<div class="ap-board-sales">' + fmt(data.your_total_sales, data.currency) + '</div>' +
       '</div>';
   }
 
@@ -1324,6 +1336,7 @@ async function apSavePaymentMethod() {
       bank_name: document.getElementById('set-bank-name').value,
       account_name: document.getElementById('set-account-name').value,
       account_number: document.getElementById('set-account-number').value,
+      payout_mode: document.getElementById('set-payout-mode').value,
     });
     apShowSaved('payment-saved');
   } catch (e) {
