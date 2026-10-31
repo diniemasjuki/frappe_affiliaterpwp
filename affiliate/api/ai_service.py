@@ -112,13 +112,22 @@ def get_ai_config() -> dict:
 	present. Callers must treat configured=False as "AI features
 	unavailable", never as an error: the wizard keeps working without
 	AI, it just loses the extraction/verification panels.
+
+	Everything is gated behind the enable_ai_integration master switch:
+	when it is off, both feature flags come back False no matter what
+	the individual checkboxes say.
 	"""
 	from frappe.utils import cint
 
 	settings = frappe.get_cached_doc("Affiliate Settings")
 	provider = settings.ai_provider or ""
+	# The master switch wins over everything: with it off, the feature
+	# checkboxes keep whatever state they were last saved in but the
+	# whole integration is inert - that is what makes "disable AI" a
+	# single toggle the admin can flip without touching anything else.
 	enabled = bool(
-		provider
+		cint(settings.enable_ai_integration)
+		and provider
 		and (cint(settings.enable_id_extraction) or cint(settings.enable_ai_verification))
 	)
 	key = settings.get_password("ai_api_key", raise_exception=False) if enabled else ""

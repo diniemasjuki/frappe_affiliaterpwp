@@ -435,12 +435,79 @@ def sync_from_payment_entry(doc, method=None):
 
 
 def _linked_sales_order(sales_invoice_doc) -> str | None:
-	# A Sales Invoice can originate from a Sales Order via its items'
-	# `sales_order` field (standard ERPNext "Items" table reference).
-	for item in sales_invoice_doc.get("items") or []:
-		if item.get("sales_order"):
-			return item.sales_order
-	return None
+    # A Sales Invoice can originate from a Sales Order via its items'
+    # `sales_order` field (standard ERPNext "Items" table reference).
+    for item in sales_invoice_doc.get("items") or []:
+        if item.get("sales_order"):
+            return item.sales_order
+    return None
+
+
+def resync_commissions_for_affiliate(affiliate: str) -> list[dict]:
+    """Re-runs the exact sync the doc_events hooks perform, on demand,
+    for every non-reversal commission of one affiliate - for the admin
+    "Check & Regenerate Payout" desk action, which must not trust that
+    every hook firing was caught (e.g. status changes made while the
+    affiliate app was disabled, or older-than-sync edge cases).
+
+    Mirrors the hook order for each commission: the Sales Order pass
+    first (recomputes the amount from current line items and resolves
+    status while no invoice exists), then every linked Sales Invoice
+    (refreshes the recorded invoice rows; SI status wins over SO).
+    Cancellation/return statuses flow through the same _resolve_*
+    mappings, so a voided sale lands on Denied - and a Paid commission
+    on a voided sale triggers the clawback reversal - exactly as the
+    hooks would.
+
+    Returns the status transitions, as [{"commission", "from", "to"}],
+    so the caller can report what the check actually changed.
+    """
+    commissions = frappe.get_all(
+        "Affiliate Commission",
+        filters={"affiliate": affiliate, "is_reversal": 0},
+        fields=["name", "status", "sales_order", "sales_invoice"],
+    )
+    if not commissions:
+        return []
+
+    before = {c.name: c.status for c in commissions}
+
+    # Sales Order pass - one fetch per distinct SO (a non-reversal
+    # commission is unique per SO, so no dedup needed beyond this).
+    for c in commissions:
+        if c.sales_order and frappe.db.exists("Sales Order", c.sales_order):
+            sync_from_sales_order(frappe.get_doc("Sales Order", c.sales_order))
+
+    # Sales Invoice pass - child-table rows first (the full multi-invoice
+    # record), then the legacy primary link field for rows that predate
+    # the child table. sync_from_sales_invoice is idempotent per invoice.
+    for c in commissions:
+        invoice_names = list(
+            frappe.get_all(
+                "Affiliate Commission Invoice",
+                filters={"parent": c.name},
+                pluck="sales_invoice",
+            )
+        )
+        if c.sales_invoice and c.sales_invoice not in invoice_names:
+            invoice_names.append(c.sales_invoice)
+        for invoice_name in invoice_names:
+            if frappe.db.exists("Sales Invoice", invoice_name):
+                sync_from_sales_invoice(frappe.get_doc("Sales Invoice", invoice_name))
+
+    after = dict(
+        frappe.get_all(
+            "Affiliate Commission",
+            filters={"name": ["in", list(before)]},
+            fields=["name", "status"],
+            as_list=True,
+        )
+    )
+    return [
+        {"commission": name, "from": old, "to": after[name]}
+        for name, old in before.items()
+        if after.get(name) != old
+    ]
 
 
 def _update_commission_status(commission_name: str, new_status: str):

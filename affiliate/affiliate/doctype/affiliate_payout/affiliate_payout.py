@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
+from frappe import _
 from frappe.model.document import Document
 
 
@@ -35,6 +36,40 @@ class AffiliatePayout(Document):
 		if not self.is_new():
 			self._previous_status = frappe.db.get_value(
 				"Affiliate Payout", self.name, "status"
+			)
+
+		self._validate_no_duplicate_commissions()
+
+	def _validate_no_duplicate_commissions(self):
+		"""Hard anti-double-payout guarantee: a commission may be attached
+		to at most ONE Affiliate Payout, ever, regardless of which code
+		path builds the payout (scheduled monthly batch, portal manual
+		claim, admin regenerate action, or a manual Desk edit). Every
+		creator is expected to consult
+		commission_sync.get_unpaid_out_commissions* - which already
+		excludes attached commissions - but this check catches any future
+		path that forgets, plus races between two simultaneous creators.
+
+		Payouts are not submittable, so there is no cancelled-but-live
+		state that legitimately re-frees a commission: deleting a payout
+		deletes its child rows with it.
+		"""
+		commission_names = [row.commission for row in self.commissions if row.commission]
+		if not commission_names:
+			return
+
+		duplicates = frappe.get_all(
+			"Affiliate Payout Commission",
+			filters={"commission": ["in", commission_names], "parent": ["!=", self.name or ""]},
+			fields=["parent", "commission"],
+			limit=len(commission_names),
+		)
+		if duplicates:
+			first = duplicates[0]
+			frappe.throw(
+				_("Commission {0} is already attached to payout {1} - it cannot be paid out twice.").format(
+					frappe.bold(first.commission), frappe.bold(first.parent)
+				)
 			)
 
 	def on_update(self):

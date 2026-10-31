@@ -2,7 +2,7 @@ from datetime import date
 
 import frappe
 from frappe import _
-from frappe.utils import add_months, cint, get_first_day, get_last_day, getdate, nowdate, today
+from frappe.utils import add_months, cint, flt, get_first_day, get_last_day, getdate, nowdate, today
 
 from affiliate.api.commission_sync import generate_unique_bill_no, get_unpaid_out_commissions_by_currency
 from affiliate.api.currency_exchange import get_company_currency
@@ -306,3 +306,259 @@ def mark_payout_paid(payout_name: str) -> dict:
 	payout.save(ignore_permissions=True)
 
 	return {"paid": True, "payout": payout.name, "commissions_updated": commission_count}
+
+
+@frappe.whitelist()
+def check_and_regenerate_payout(commission: str) -> dict:
+	"""Desk action behind the "Check & Regenerate Payout" button on the
+	Affiliate Commission form: bring ONE affiliate's commission statuses
+	and payouts fully up to date, in two steps.
+
+	1. Re-check: re-runs the same SO/SI status sync the doc_events hooks
+	   perform (commission_sync.resync_commissions_for_affiliate) over
+	   every non-reversal commission of the commission's affiliate - so
+	   approval thresholds, cancellations/returns and clawbacks are all
+	   re-evaluated against the LIVE Sales Order / Sales Invoice statuses
+	   even if a hook firing was missed.
+	2. Regenerate: sweeps the freshly-approved commissions that are not
+	   attached to any payout into payouts - per currency, one payout per
+	   currency. Commissions already attached to a payout are excluded by
+	   the shared eligibility helper, and Affiliate Payout.validate()
+	   hard-blocks a commission landing in two payouts, so this can never
+	   double-pay. If the affiliate already has an open (Pending/
+	   Processing) payout in a currency, its not-yet-attached eligible
+	   commissions are TOPPED UP into that payout instead of creating a
+	   parallel one - keeping at most one open payout per affiliate per
+	   currency.
+
+	Returns a summary dict for the confirmation dialog: status changes
+	made, payouts created/topped up, currencies still below the minimum
+	cashout, and the final no-double-payout audit.
+	"""
+	frappe.only_for("System Manager")
+
+	affiliate = frappe.db.get_value("Affiliate Commission", commission, "affiliate")
+	if not affiliate:
+		frappe.throw(_("Commission {0} not found.").format(commission))
+
+	# 1) Re-check linked Sales Order / Sales Invoice statuses first - the
+	#    regen below must sweep based on freshly-resolved statuses, not
+	#    whatever the hooks last left behind.
+	from affiliate.api.commission_sync import resync_commissions_for_affiliate
+
+	status_changes = resync_commissions_for_affiliate(affiliate)
+
+	# 2) Regenerate payouts from everything that is now eligible.
+	created, updated, below_minimum_cashout = _regenerate_payouts_for_affiliate(
+		affiliate,
+		minimum_cashout=frappe.db.get_single_value("Affiliate Settings", "minimum_cashout") or 0,
+	)
+
+	return {
+		"affiliate": affiliate,
+		"status_changes": status_changes,
+		"payouts_created": created,
+		"payouts_updated": updated,
+		"below_minimum_cashout": below_minimum_cashout,
+		"still_eligible": len(get_unpaid_out_commissions_by_currency(affiliate)),
+		"double_payout_check": _audit_no_double_payout(affiliate),
+	}
+
+
+@frappe.whitelist()
+def check_and_regenerate_all_payouts() -> dict:
+	"""Desk action behind the "Check & Regenerate All Payouts" button on
+	Affiliate Settings - the site-wide version of
+	check_and_regenerate_payout.
+
+	Re-checks EVERY affiliate's commission statuses against their live
+	Sales Orders / Sales Invoices, then regenerates payouts from every
+	not-yet-paid-out eligible commission across all affiliates (Monthly
+	and Manual Claim alike) - one payout per affiliate per currency,
+	open payouts topped up rather than paralleled.
+
+	The same anti-double-payout guarantees apply: attached commissions
+	are never swept again, and Affiliate Payout.validate() hard-blocks
+	a commission landing in two payouts.
+	"""
+	frappe.only_for("System Manager")
+
+	from affiliate.api.commission_sync import resync_commissions_for_affiliate
+
+	affiliates = _affiliates_with_commissions()
+
+	# 1) Site-wide status re-check first, for the same reason as the
+	#    per-commission action: sweep on freshly-resolved statuses.
+	status_changes = []
+	for affiliate in affiliates:
+		status_changes.extend(resync_commissions_for_affiliate(affiliate))
+
+	# 2) Regenerate for everyone actually holding eligible commissions.
+	minimum_cashout = frappe.db.get_single_value("Affiliate Settings", "minimum_cashout") or 0
+	created = []
+	updated = []
+	below_minimum_cashout = []
+	for affiliate in affiliates_with_approved_commissions():
+		a_created, a_updated, a_below = _regenerate_payouts_for_affiliate(
+			affiliate, minimum_cashout=minimum_cashout
+		)
+		created.extend(a_created)
+		updated.extend(a_updated)
+		# Site-wide summary: identify whose currency fell short.
+		below_minimum_cashout.extend(f"{affiliate} ({currency})" for currency in a_below)
+
+	return {
+		"affiliates_processed": len(affiliates),
+		"status_changes": status_changes,
+		"payouts_created": created,
+		"payouts_updated": updated,
+		"below_minimum_cashout": below_minimum_cashout,
+		"still_eligible": _count_eligible_commissions_site_wide(),
+		"double_payout_check": _audit_no_double_payout(),
+	}
+
+
+def _affiliates_with_commissions() -> list[str]:
+	"""Every affiliate holding at least one non-reversal commission - the
+	population the site-wide status re-check sweeps. Module-level so
+	tests can stub it down to their own fixtures instead of touching a
+	live site's real commissions.
+	"""
+	return frappe.get_all(
+		"Affiliate Commission",
+		filters={"is_reversal": 0},
+		fields=["affiliate"],
+		distinct=True,
+		pluck="affiliate",
+	)
+
+
+def _regenerate_payouts_for_affiliate(
+	affiliate: str, minimum_cashout: float
+) -> tuple[list[str], list[str], list[str]]:
+	"""Sweeps one affiliate's currently-eligible commissions into
+	payouts, per currency: an open (Pending/Processing) payout in a
+	currency is topped up with the not-yet-attached commissions, a
+	currency with none gets a new payout when it clears the minimum
+	cashout. Returns (created, updated, below_minimum_cashout).
+	"""
+	source = (
+		PAYOUT_SOURCE_MONTHLY
+		if resolve_payout_mode(frappe.db.get_value("Affiliate Profile", affiliate, "payout_mode"))
+		== PAYOUT_MODE_MONTHLY
+		else PAYOUT_SOURCE_MANUAL
+	)
+
+	created = []
+	updated = []
+	below_minimum_cashout = []
+	for currency in sorted(get_unpaid_out_commissions_by_currency(affiliate)):
+		open_payout = frappe.get_all(
+			"Affiliate Payout",
+			filters={
+				"affiliate": affiliate,
+				"currency": currency,
+				"status": ["in", ["Pending", "Processing"]],
+			},
+			limit=1,
+		)
+		if open_payout:
+			if _top_up_payout(open_payout[0].name):
+				updated.append(open_payout[0].name)
+			continue
+
+		payout_name = generate_payout_batch_for_affiliate(
+			affiliate,
+			minimum_cashout=minimum_cashout,
+			currency=currency,
+			source=source,
+		)
+		if payout_name:
+			created.append(payout_name)
+		else:
+			# Eligibility said there WERE commissions in this currency, so
+			# the only reason generate_... returns None is the threshold.
+			below_minimum_cashout.append(currency)
+
+	return created, updated, below_minimum_cashout
+
+
+def _count_eligible_commissions_site_wide() -> int:
+	"""Approved, non-reversal commissions still not attached to any
+	payout, across all affiliates - what a further run could still act
+	on (below-threshold currencies, currencies with an open payout).
+	"""
+	return cint(
+		frappe.db.sql(
+			"""SELECT COUNT(*) FROM `tabAffiliate Commission` c
+			   WHERE c.status = 'Approved' AND c.is_reversal = 0
+			     AND NOT EXISTS (
+			         SELECT 1 FROM `tabAffiliate Payout Commission` pc
+			         WHERE pc.commission = c.name
+			     )"""
+		)[0][0]
+	)
+
+
+def _top_up_payout(payout_name: str) -> bool:
+	"""Adds every of the payout's affiliate's not-yet-attached eligible
+	commissions IN THE PAYOUT'S CURRENCY to its open (Pending/Processing)
+	payout and refreshes the amount, instead of creating a second
+	concurrent payout for the same money pool. Returns True when rows
+	were added.
+
+	Eligibility already excludes commissions attached to ANY payout, and
+	the payout's validate() would reject a duplicate anyway, so this can
+	never attach the same commission twice.
+	"""
+	payout = frappe.get_doc("Affiliate Payout", payout_name)
+	attached = {row.commission for row in payout.commissions}
+	new_commissions = [
+		c.name
+		for c in get_unpaid_out_commissions_by_currency(payout.affiliate).get(payout.currency, [])
+		if c.name not in attached
+	]
+	if not new_commissions:
+		return False
+
+	for commission_name in new_commissions:
+		payout.append("commissions", {"commission": commission_name})
+
+	# The amount is always the sum of the child rows' commissions - the
+	# child table stores links only, so the amounts come from the DB.
+	amounts = frappe.get_all(
+		"Affiliate Commission",
+		filters={"name": ["in", [row.commission for row in payout.commissions]]},
+		pluck="commission_amount",
+	)
+	payout.amount = flt(sum(amounts or []))
+
+	payout.save(ignore_permissions=True)
+	return True
+
+
+def _audit_no_double_payout(affiliate: str | None = None) -> list[str]:
+	"""Final integrity check for the regenerate action: any commission
+	that ended up attached to more than one payout row would be listed
+	here. Empty list = no commission can be paid twice. Pass an
+	affiliate to scope the check to their commissions; None audits the
+	whole site.
+	(A second line of defence - Affiliate Payout.validate() already
+	blocks the duplicates this would look for.)
+	"""
+	if affiliate:
+		return frappe.db.sql(
+			"""SELECT pc.commission
+			   FROM `tabAffiliate Payout Commission` pc
+			   JOIN `tabAffiliate Commission` c ON c.name = pc.commission
+			   WHERE c.affiliate = %s
+			   GROUP BY pc.commission HAVING COUNT(*) > 1""",
+			(affiliate,),
+			pluck=True,
+		)
+	return frappe.db.sql(
+		"""SELECT pc.commission
+		   FROM `tabAffiliate Payout Commission` pc
+		   GROUP BY pc.commission HAVING COUNT(*) > 1""",
+		pluck=True,
+	)

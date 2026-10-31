@@ -7,21 +7,40 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
-  "commission"
+  "commission",
+  "amount",
+  "currency"
  ],
  "fields": [
   {
    "fieldname": "commission",
    "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
    "label": "Commission",
    "options": "Affiliate Commission"
+  },
+  {
+   "fetch_from": "commission.commission_amount",
+   "fieldname": "amount",
+   "fieldtype": "Read Only",
+   "in_list_view": 1,
+   "label": "Amount",
+   "precision": "2"
+  },
+  {
+   "fetch_from": "commission.currency",
+   "fieldname": "currency",
+   "fieldtype": "Read Only",
+   "in_list_view": 1,
+   "label": "Currency"
   }
  ],
  "grid_page_length": 50,
- "index_web_pages_for_search": 1,
  "istable": 1,
+ "link_display_mode": "Search",
  "links": [],
- "modified": "2026-07-21 11:58:24.984649",
+ "modified": "2026-10-31 16:20:21.481236",
  "modified_by": "Administrator",
  "module": "Affiliate",
  "name": "Affiliate Payout Commission",

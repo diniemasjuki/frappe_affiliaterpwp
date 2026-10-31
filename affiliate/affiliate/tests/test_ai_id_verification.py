@@ -120,6 +120,7 @@ class TestAffiliateSettingsAiValidation(UnitTestCase):
 	def tearDown(self):
 		# Back to a disabled, key-less AI config whatever the test did.
 		doc = frappe.get_doc("Affiliate Settings")
+		doc.enable_ai_integration = 0
 		doc.enable_id_extraction = 0
 		doc.enable_ai_verification = 0
 		doc.ai_api_key = None  # empties the field -> removes the stored password
@@ -134,8 +135,42 @@ class TestAffiliateSettingsAiValidation(UnitTestCase):
 		doc.save()
 		return doc
 
+	def test_master_switch_off_saves_without_key(self):
+		# The AI Integration master switch is off: feature checkboxes may
+		# stay checked from an earlier configuration, but no key is
+		# demanded - a site that doesn't want AI is never blocked from
+		# saving, and the runtime config reports every feature off.
+		self._save_settings(
+			enable_ai_integration=0,
+			ai_provider="OpenAI",
+			enable_id_extraction=1,
+			enable_ai_verification=1,
+			ai_api_key=None,
+		)
+		config = ai_service.get_ai_config()
+		self.assertFalse(config["enable_id_extraction"])
+		self.assertFalse(config["enable_ai_verification"])
+		self.assertFalse(config["configured"])
+
+	def test_master_switch_off_overrides_checked_features(self):
+		# Same but the switch is flipped off after the features were
+		# enabled with a key: get_ai_config must go fully dark while the
+		# stored checkboxes keep their state.
+		self._save_settings(
+			enable_ai_integration=1,
+			ai_provider="OpenAI",
+			enable_id_extraction=1,
+			ai_api_key="sk-test-" + random_string(8),
+		)
+		self.assertTrue(ai_service.get_ai_config()["enable_id_extraction"])
+		self._save_settings(enable_ai_integration=0)
+		config = ai_service.get_ai_config()
+		self.assertFalse(config["enable_id_extraction"])
+		self.assertFalse(config["configured"])
+
 	def test_enabling_ai_without_key_is_rejected(self):
 		doc = frappe.get_doc("Affiliate Settings")
+		doc.enable_ai_integration = 1
 		doc.ai_provider = "OpenAI"
 		doc.enable_id_extraction = 1
 		doc.ai_api_key = None
@@ -145,6 +180,7 @@ class TestAffiliateSettingsAiValidation(UnitTestCase):
 
 	def test_enabling_ai_with_key_saves(self):
 		self._save_settings(
+			enable_ai_integration=1,
 			ai_provider="OpenAI",
 			enable_id_extraction=1,
 			ai_api_key="sk-test-" + random_string(8),
@@ -155,6 +191,7 @@ class TestAffiliateSettingsAiValidation(UnitTestCase):
 
 	def test_provider_defaults_fill_blank_url_and_model(self):
 		self._save_settings(
+			enable_ai_integration=1,
 			ai_provider="GLM",
 			enable_ai_verification=1,
 			ai_api_key="zk-test-" + random_string(8),
@@ -169,7 +206,10 @@ class TestAffiliateSettingsAiValidation(UnitTestCase):
 		# Flags on but no key stored (flag flips bypass validate(), like a
 		# direct DB write would) - callers must see configured=False, not
 		# crash.
-		frappe.db.set_single_value("Affiliate Settings", {"enable_id_extraction": 1, "ai_provider": "OpenAI"})
+		frappe.db.set_single_value(
+			"Affiliate Settings",
+			{"enable_ai_integration": 1, "enable_id_extraction": 1, "ai_provider": "OpenAI"},
+		)
 		config = ai_service.get_ai_config()
 		self.assertFalse(config["configured"])
 
@@ -199,6 +239,7 @@ class TestWizardStep2SanitizeAndAiVerification(UnitTestCase):
 		# Back to AI disabled with no stored test key, whatever happened.
 		frappe.set_user("Administrator")
 		doc = frappe.get_doc("Affiliate Settings")
+		doc.enable_ai_integration = 0
 		doc.enable_id_extraction = 0
 		doc.enable_ai_verification = 0
 		doc.ai_api_key = None  # empties the field -> removes the stored password
@@ -216,6 +257,7 @@ class TestWizardStep2SanitizeAndAiVerification(UnitTestCase):
 	def _enable_ai(self):
 		frappe.set_user("Administrator")
 		doc = frappe.get_doc("Affiliate Settings")
+		doc.enable_ai_integration = 1
 		doc.ai_provider = "OpenAI"
 		doc.enable_id_extraction = 1
 		doc.enable_ai_verification = 1

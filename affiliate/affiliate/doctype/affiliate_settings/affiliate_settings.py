@@ -47,6 +47,7 @@ class AffiliateSettings(Document):
 		commission_on_addons: DF.Check
 		default_commission_percent: DF.Percent
 		default_payout_mode: DF.Literal["Manual Claim", "Monthly"]
+		enable_ai_integration: DF.Check
 		enable_ai_verification: DF.Check
 		enable_id_extraction: DF.Check
 		last_monthly_batch_run: DF.Date | None
@@ -85,7 +86,14 @@ class AffiliateSettings(Document):
 		# unreachable provider disables the AI panels without breaking
 		# the wizard - this check is about honest configuration, not a
 		# runtime gate.)
-		if self.enable_id_extraction or self.enable_ai_verification:
+		# The enable_ai_integration master switch gates the whole section:
+		# with it off, none of this applies - feature checkboxes keep
+		# their stored state but stay inert (see get_ai_config), so a
+		# site that doesn't want AI is never blocked from saving by an
+		# API key it doesn't have.
+		if self.enable_ai_integration and (
+			self.enable_id_extraction or self.enable_ai_verification
+		):
 			if not self.ai_provider:
 				frappe.throw(_("AI Provider is required when an AI feature is enabled."))
 			if not self.get_password("ai_api_key", raise_exception=False):
