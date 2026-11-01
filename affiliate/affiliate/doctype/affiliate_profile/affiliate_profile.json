@@ -312,9 +312,18 @@
   }
  ],
  "grid_page_length": 50,
- "index_web_pages_for_search": 1,
- "links": [],
- "modified": "2026-09-14 10:00:00.000000",
+ "link_display_mode": "Search",
+ "links": [
+  {
+   "link_doctype": "Affiliate Commission",
+   "link_fieldname": "affiliate"
+  },
+  {
+   "link_doctype": "Affiliate Payout",
+   "link_fieldname": "affiliate"
+  }
+ ],
+ "modified": "2026-11-01 16:45:06.613864",
  "modified_by": "Administrator",
  "module": "Affiliate",
  "name": "Affiliate Profile",

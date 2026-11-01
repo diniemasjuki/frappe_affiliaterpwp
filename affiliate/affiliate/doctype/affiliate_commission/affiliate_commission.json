@@ -12,11 +12,11 @@
   "sales_invoice",
   "booking",
   "column_break_pakj",
+  "status",
   "currency",
   "commission_amount",
   "commission_rate",
   "commission_base",
-  "status",
   "reversal_section",
   "is_reversal",
   "reverses",
@@ -27,6 +27,7 @@
   {
    "fieldname": "affiliate",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Affiliate",
    "options": "Affiliate Profile"
   },
@@ -67,12 +68,15 @@
   {
    "fieldname": "commission_amount",
    "fieldtype": "Currency",
+   "in_list_view": 1,
    "label": "Commission Amount",
-   "options": "currency"
+   "options": "currency",
+   "precision": "2"
   },
   {
    "fieldname": "commission_rate",
    "fieldtype": "Float",
+   "in_list_view": 1,
    "label": "Commission Rate (%)",
    "read_only": 1
   },
@@ -86,6 +90,7 @@
   {
    "fieldname": "status",
    "fieldtype": "Select",
+   "in_list_view": 1,
    "label": "Status",
    "options": "Pending\nInvoiced\nApproved\nPaid\nDenied",
    "read_only": 1
@@ -96,9 +101,10 @@
    "label": "Clawback / Reversal"
   },
   {
-   "default": 0,
+   "default": "0",
    "fieldname": "is_reversal",
    "fieldtype": "Check",
+   "in_list_view": 1,
    "label": "Is Reversal",
    "read_only": 1
   },
@@ -122,9 +128,9 @@
   }
  ],
  "grid_page_length": 50,
- "index_web_pages_for_search": 1,
+ "link_display_mode": "Search",
  "links": [],
- "modified": "2026-07-23 18:02:51.338175",
+ "modified": "2026-11-01 16:41:25.086746",
  "modified_by": "Administrator",
  "module": "Affiliate",
  "name": "Affiliate Commission",
@@ -148,5 +154,18 @@
  "rows_threshold_for_grid_search": 20,
  "sort_field": "creation",
  "sort_order": "DESC",
- "states": []
+ "states": [
+  {
+   "color": "Blue",
+   "title": "Pending"
+  },
+  {
+   "color": "Green",
+   "title": "Approved"
+  },
+  {
+   "color": "Red",
+   "title": "Denied"
+  }
+ ]
 }

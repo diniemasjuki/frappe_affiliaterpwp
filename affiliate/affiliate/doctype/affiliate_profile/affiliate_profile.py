@@ -47,7 +47,7 @@ class AffiliateProfile(Document):
 		available_balance_est: DF.Currency
 		balances: DF.Table[AffiliateCurrencyBalance]
 		bank_name: DF.Data | None
-		commission_base: DF.Literal["", "Gross", "Nett"] | None
+		commission_base: DF.Literal["", "Gross", "Nett"]
 		commission_rate: DF.Percent
 		date_of_birth: DF.Date | None
 		default_currency: DF.Link | None

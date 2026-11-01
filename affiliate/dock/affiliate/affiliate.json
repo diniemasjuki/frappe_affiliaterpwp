@@ -1,6 +1,6 @@
 {
  "app": "affiliate",
- "creation": "2026-09-07 10:05:43.245805",
+ "creation": "2026-09-07 10:43:16.911075",
  "docstatus": 0,
  "doctype": "Dock",
  "idx": 0,
@@ -14,7 +14,7 @@
    "title": "Affiliate"
   }
  ],
- "modified": "2026-09-07 10:42:59.759266",
+ "modified": "2026-11-01 23:34:00.317782",
  "modified_by": "Administrator",
  "mount_on": "travel_booking",
  "name": "affiliate",

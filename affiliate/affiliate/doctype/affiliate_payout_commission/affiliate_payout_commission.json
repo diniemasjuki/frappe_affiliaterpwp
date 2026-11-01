@@ -8,8 +8,9 @@
  "engine": "InnoDB",
  "field_order": [
   "commission",
-  "amount",
-  "currency"
+  "invoice_id",
+  "currency",
+  "amount"
  ],
  "fields": [
   {
@@ -23,24 +24,35 @@
   {
    "fetch_from": "commission.commission_amount",
    "fieldname": "amount",
-   "fieldtype": "Read Only",
+   "fieldtype": "Currency",
    "in_list_view": 1,
    "label": "Amount",
+   "options": "currency",
    "precision": "2"
   },
   {
    "fetch_from": "commission.currency",
    "fieldname": "currency",
+   "fieldtype": "Link",
+   "label": "Currency",
+   "mask": 1,
+   "options": "Currency",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fetch_from": "commission.sales_invoice",
+   "fieldname": "invoice_id",
    "fieldtype": "Read Only",
    "in_list_view": 1,
-   "label": "Currency"
+   "label": "Invoice ID"
   }
  ],
  "grid_page_length": 50,
  "istable": 1,
  "link_display_mode": "Search",
  "links": [],
- "modified": "2026-10-31 16:20:21.481236",
+ "modified": "2026-11-01 16:31:48.492398",
  "modified_by": "Administrator",
  "module": "Affiliate",
  "name": "Affiliate Payout Commission",

@@ -116,7 +116,10 @@
    "fieldtype": "Currency",
    "in_list_view": 1,
    "label": "Amount",
-   "options": "currency"
+   "mask": 1,
+   "options": "currency",
+   "precision": "2",
+   "read_only": 1
   },
   {
    "fieldname": "commissions",
@@ -126,9 +129,9 @@
   }
  ],
  "grid_page_length": 50,
- "index_web_pages_for_search": 1,
+ "link_display_mode": "Search",
  "links": [],
- "modified": "2026-07-23 14:17:09.328593",
+ "modified": "2026-11-01 16:36:51.223961",
  "modified_by": "Administrator",
  "module": "Affiliate",
  "name": "Affiliate Payout",

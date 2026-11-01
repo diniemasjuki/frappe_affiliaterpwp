@@ -14,9 +14,10 @@ class AffiliatePayoutCommission(Document):
 	if TYPE_CHECKING:
 		from frappe.types import DF
 
-		amount: DF.ReadOnly | None
+		amount: DF.Currency
 		commission: DF.Link | None
-		currency: DF.ReadOnly | None
+		currency: DF.Link | None
+		invoice_id: DF.ReadOnly | None
 		parent: DF.Data
 		parentfield: DF.Data
 		parenttype: DF.Data
